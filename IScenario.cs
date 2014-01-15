@@ -4,12 +4,40 @@ using System.Text;
 
 namespace DuffyExercise
 {
+   /* public class ScenarioKey
+    {
+        public string _ID;
+        public double _date;
+        public int _path;
+
+        public bool Equals(ScenarioKey Key)
+        {
+            return (Key._ID == _ID && Key._date == _date && Key._path == _path);
+        }
+
+        public override bool Equals(Object obj)
+        {
+            return Equals(obj as ScenarioKey);
+        }
+        public override int GetHashCode()
+        {
+            return _ID.GetHashCode() ^ _date.GetHashCode() ^ _path.GetHashCode();
+        }
+
+        public ScenarioKey(string ID, double date, int path)
+        {
+            _ID = ID;
+            _date = date;
+            _path = path;
+        }
+
+    }*/
 
 
     // BROWNINA MANAGER ---------------------------------------------------------------------------
     /// <summary>
     ///     Brownian Dispatcher. Given certain logic it delivers brownian motion to every risk Factor.
-    ///     Implement the dispatch method. klajasdfadsfasdfafa
+    ///     Implement the dispatch method. 
     /// </summary>
     public class BrownianManager
     {
@@ -47,12 +75,40 @@ namespace DuffyExercise
     /// </summary>
     public class Scenario : IScenario
     {
-
+        //->ATTRIBUTES
+        private List< Dictionary<string, Dictionary<double, double>> >_scenarios;
         #region IScenario Members
 
         public double getValue(string ID, double date, int path)
         {
-            throw new Exception("The method or operation is not implemented.");
+          /*  try
+            {
+                return _scenarios[new ScenarioKey(ID,date,path)];
+            }
+            catch
+            {
+                throw new Exception("Scenario not found.");
+            }*/
+            return 0;
+        }
+
+        public Scenario()
+        {
+            List<double> Dates =new List<double>(new double[]{40000, 40100, 40200, 40300, 40400, 40500, 40600, 40700, 40800, 40900 });
+            double DFstep = 0.015;
+            double EquitySpot = 9.89; //BBVA
+            Dictionary<double, double> innerDictionary = new Dictionary<double, double>();
+            //IR Curve
+
+            for (int i = 0; i < Dates.Count; i++)
+                innerDictionary.Add(Dates[i],  1 + i*DFstep);
+            Dictionary<string, Dictionary<double,double> > outerDictionary = new Dictionary<string,Dictionary<double,double>>();
+            outerDictionary.Add("IRCurve", innerDictionary);
+            _scenarios = new List<Dictionary<string, Dictionary<double, double>>>();
+            _scenarios.Add(outerDictionary);
+
+            //Equity
+           // _scenarios.Add(new ScenarioKey("BBVA", 40000, 0), EquitySpot);
         }
 
         #endregion
@@ -283,7 +339,7 @@ namespace DuffyExercise
 
         // -> METHODS
         // -------------------------------
-        public void calculate(List<double> dates, int noSim)
+          public void calculate(List<double> dates, int noSim)
         {
             Scenario scenario =  new Scenario();
 
