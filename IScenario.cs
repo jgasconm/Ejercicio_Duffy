@@ -4,7 +4,7 @@ using System.Text;
 
 namespace DuffyExercise
 {
-   public class ScenarioKey
+   public class ScenarioKey //Key class to look for a value into the scenario Dictionary
     {
         public string _ID;
         public double _date;
@@ -67,6 +67,7 @@ namespace DuffyExercise
         ///     Returns a value for a scalar risk factor for date and path.
         /// </summary>
         double getValue(string ID, double date, int path);
+        void setValue(string ID, double date, int path, double value);
 
     }
 
@@ -107,7 +108,13 @@ namespace DuffyExercise
             //Equity
             _scenarios.Add(new ScenarioKey("BBVA", 40000, 0), EquitySpot);
         }
-
+		
+		public void setValue(string ID, double date, int path, double value)
+		{
+		
+			_scenarios.Add(new ScenarioKey(ID, date, path), value);
+		}
+			
         #endregion
     }
 
@@ -168,8 +175,18 @@ namespace DuffyExercise
         public override void evolve(double dateFrom, double dateTo, int path, 
                                     IScenario scenario, double[] correlatedBrownians)
         {
+		double currentValue;
+		double nextValue;
+		try{
+		currentValue = scenario.getValue(ID,dateFrom,path);
+		nextValue = currentValue + correlatedBrownians[0];
+		scenario.setValue(ID, dateTo,path, nextValue);
+		}
+		catch{
+		
             throw new Exception("The method or operation is not implemented.");
         }
+		}
 
         public override int size(double date)
         {
@@ -339,8 +356,7 @@ namespace DuffyExercise
           public void calculate(List<double> dates, int noSim)
         {
             Scenario scenario =  new Scenario();
-            System.Console.WriteLine(scenario.getValue("IRCurve", 40200, 0));
-
+            
             // -> CREATE SCENARIO ...
             for (int j = 0; j < noSim; ++j)
             {
