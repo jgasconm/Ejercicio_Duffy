@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
+
+//HOLaaaaa
 namespace DuffyExercise
 {
    public class ScenarioKey //Key class to look for a value into the scenario Dictionary
