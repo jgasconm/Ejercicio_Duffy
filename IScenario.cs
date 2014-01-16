@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-
+/// prueba de commit con tortoisegit
 namespace DuffyExercise
 {
-   public class ScenarioKey //Key class to look for a value into the scenario Dictionary
+    using ExtensionsRandom;
+
+    public class ScenarioKey //Key class to look for a value into the scenario Dictionary
     {
         public string _ID;
         public double _date;
@@ -33,11 +35,10 @@ namespace DuffyExercise
 
     }
 
-
-    // BROWNINA MANAGER ---------------------------------------------------------------------------
+    // BROWNIAN MANAGER ---------------------------------------------------------------------------
     /// <summary>
     ///     Brownian Dispatcher. Given certain logic it delivers brownian motion to every risk Factor.
-    ///     Implement the dispatch method. 
+    ///     Implement the dispatch method.
     /// </summary>
     public class BrownianManager //Prueba prueba prueba >>>>
     {
@@ -50,7 +51,7 @@ namespace DuffyExercise
 
         public double[] dispatch(string sID, double[] brownianVector)
         {
-            throw(new ApplicationException("Method not implemented"));
+            throw (new ApplicationException("Method not implemented"));
         }
     }
 
@@ -68,7 +69,6 @@ namespace DuffyExercise
         /// </summary>
         double getValue(string ID, double date, int path);
         void setValue(string ID, double date, int path, double value);
-
     }
 
     /// <summary>
@@ -79,42 +79,43 @@ namespace DuffyExercise
         //->ATTRIBUTES
         //private List< Dictionary<string, Dictionary<double, double>> >_scenarios;
         private Dictionary<ScenarioKey, double> _scenarios;
+
         #region IScenario Members
 
         public double getValue(string ID, double date, int path)
         {
             try
             {
-                return _scenarios[new ScenarioKey(ID,date,path)];
+                return _scenarios[new ScenarioKey(ID, date, path)];
             }
             catch
             {
                 throw new Exception("Scenario not found.");
             }
-            
+
         }
 
         public Scenario()
         {
-            List<double> Dates =new List<double>(new double[]{40000, 40100, 40200, 40300, 40400, 40500, 40600, 40700, 40800, 40900 });
+            List<double> Dates = new List<double>(new double[] { 40000, 40100, 40200, 40300, 40400, 40500, 40600, 40700, 40800, 40900 });
             double DFstep = 0.015;
             double EquitySpot = 9.89; //BBVA
-            _scenarios = new Dictionary<ScenarioKey, double>();   
+            _scenarios = new Dictionary<ScenarioKey, double>();
             //IR Curve
 
             for (int i = 0; i < Dates.Count; i++)
-                _scenarios.Add(new ScenarioKey("IRCurve", Dates[i], 0), 1 - i*DFstep);
+                _scenarios.Add(new ScenarioKey("IRCurve", Dates[i], 0), 1 - i * DFstep);
 
             //Equity
             _scenarios.Add(new ScenarioKey("BBVA", 40000, 0), EquitySpot);
         }
-		
-		public void setValue(string ID, double date, int path, double value)
-		{
-		
-			_scenarios.Add(new ScenarioKey(ID, date, path), value);
-		}
-			
+
+        public void setValue(string ID, double date, int path, double value)
+        {
+
+            _scenarios.Add(new ScenarioKey(ID, date, path), value);
+        }
+
         #endregion
     }
 
@@ -150,7 +151,7 @@ namespace DuffyExercise
 
         // -> ABSTRACT METHODS
         //---------------------------------------
-        public void evolve(double dateFrom, double dateTo, int path, IScenario scenario, 
+        public void evolve(double dateFrom, double dateTo, int path, IScenario scenario,
                                     double[] correlatedBrownians, BrownianManager brownianDispacther)
         {
             evolve(dateFrom, dateTo, path, scenario, brownianDispacther.dispatch(ID, correlatedBrownians));
@@ -172,25 +173,27 @@ namespace DuffyExercise
     {
         // -> METHODS
         // --------------------
-        public override void evolve(double dateFrom, double dateTo, int path, 
+        public override void evolve(double dateFrom, double dateTo, int path,
                                     IScenario scenario, double[] correlatedBrownians)
         {
-		double currentValue;
-		double nextValue;
-		try{
-		currentValue = scenario.getValue(ID,dateFrom,path);
-		nextValue = currentValue + correlatedBrownians[0];
-		scenario.setValue(ID, dateTo,path, nextValue);
-		}
-		catch{
-		
-            throw new Exception("The method or operation is not implemented.");
+            double currentValue;
+            double nextValue;
+            try
+            {
+                currentValue = scenario.getValue(ID, dateFrom, path);
+                nextValue = currentValue + correlatedBrownians[0];
+                scenario.setValue(ID, dateTo, path, nextValue);
+            }
+            catch
+            {
+
+                throw new Exception("The method or operation is not implemented.");
+            }
         }
-		}
 
         public override int size(double date)
         {
-           return 1;
+            return 1;
         }
     }
 
@@ -208,8 +211,48 @@ namespace DuffyExercise
         double[] nextSequence(int dim);
     }
 
-    // --------------------------------------------------------------------------------------
+    namespace ExtensionsRandom
+    {
+        /// <summary>
+        ///  Extending class Random (with "cow" method NextDouble) to have method NextGaussian
+        /// </summary>
+        public static class RandomExtensions
+        {
+            public static double NextGaussian(this System.Random rand, double mu = 0.0, double sigma = 1.0)
+            {
+                double u1 = rand.NextDouble();
+                double u2 = rand.NextDouble();
 
+                double rand_std_normal = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
+                double rand_normal = mu + sigma * rand_std_normal;
+
+                return rand_normal;
+            }
+        }
+    }
+
+    public class BoxMuller : IGaussianGenerator
+    {
+        public double next()
+        {
+            Random rand = new System.Random();
+            return rand.NextGaussian();
+        }
+
+        public double[] nextSequence(int dim)
+        {
+            double[] sequence = new double[dim];
+
+            for (int j = 0; j < dim; ++j)
+            {
+                sequence.SetValue(next(), j);
+            }
+
+            return sequence;
+        }
+    }
+
+    // --------------------------------------------------------------------------------------
 
 
     // MONTE CARLO ENGINE -------------------------------------------------------------------
@@ -226,15 +269,15 @@ namespace DuffyExercise
     {
         // -> ATTRIBUTES
         // ---------------------
-        List<RiskFactor>                        _l_RiskFactors;
-        IGaussianGenerator                      _gaussianGenerator;
-        BrownianManager                         _brownianManager;
-        Correlator                              _correlator;
+        List<RiskFactor> _l_RiskFactors;
+        IGaussianGenerator _gaussianGenerator;
+        BrownianManager _brownianManager;
+        Correlator _correlator;
 
 
         // -> METHODS
         // ---------------------
-        
+
         /// <summary>
         ///     Implement: evolve every Risk Factor from dateFrom to dateTo.
         /// </summary>
@@ -261,8 +304,8 @@ namespace DuffyExercise
     {
         // -> ATTRIBUTES
         // -------------------
-        Pricer                          _pricer;
-        InstrumentContract              _InstrumentContract;
+        Pricer _pricer;
+        InstrumentContract _InstrumentContract;
 
         // -> METHODS 
         // --------------------
@@ -275,7 +318,7 @@ namespace DuffyExercise
         // -> ACCEORS & MODIFIERS
         // -----------------------
         public Pricer pricer { get { return _pricer; } set { _pricer = value; } }
-        public InstrumentContract instrumentContract{get{return _InstrumentContract;}set{_InstrumentContract = value;}}
+        public InstrumentContract instrumentContract { get { return _InstrumentContract; } set { _InstrumentContract = value; } }
     }
     /// <summary>
     ///     Information about the contractual agreement.
@@ -341,9 +384,9 @@ namespace DuffyExercise
     {
         // -> ATTRIBUTES
         // --------------------
-        Evolver                                             _engine;
-        List<Instrument>                                    _l_Instruments;
-        List<Metric>                                        _l_Metric;
+        Evolver _engine;
+        List<Instrument> _l_Instruments;
+        List<Metric> _l_Metric;
 
         // CONSTRUCTOR (TO BE IMPLEMENTED)
         // -------------------------------
@@ -353,10 +396,10 @@ namespace DuffyExercise
 
         // -> METHODS
         // -------------------------------
-          public void calculate(List<double> dates, int noSim)
+        public void calculate(List<double> dates, int noSim)
         {
-            Scenario scenario =  new Scenario();
-            
+            Scenario scenario = new Scenario();
+
             // -> CREATE SCENARIO ...
             for (int j = 0; j < noSim; ++j)
             {
@@ -368,15 +411,15 @@ namespace DuffyExercise
                     // -> PRICE
                     double npv = 0.0;
                     for (int k = 0; k < _l_Instruments.Count; ++k)
-                        npv += _l_Instruments[k].price(dates[i], j,  scenario);
+                        npv += _l_Instruments[k].price(dates[i], j, scenario);
 
                     // -> CALL TO METRIC TO TAKE INTO ACCOUNT THE NPV
-                    foreach(Metric metric in _l_Metric)
+                    foreach (Metric metric in _l_Metric)
                         metric.addNPVToMetric(dates[i], j, npv, scenario);
                 }
             }
 
-        }       
+        }
     }
 
     // --------------------------------------------------------------------------------------
