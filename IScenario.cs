@@ -39,7 +39,7 @@ namespace DuffyExercise
     ///     Brownian Dispatcher. Given certain logic it delivers brownian motion to every risk Factor.
     ///     Implement the dispatch method. 
     /// </summary>
-    public class BrownianManager
+    public class BrownianManager //Prueba prueba prueba >>>>
     {
         /// <summary>
         ///     Implements the logic for dispatching.
