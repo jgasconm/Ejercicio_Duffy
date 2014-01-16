@@ -1,15 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-// A VER SI SALE ESTE COMENTARIO TONTO DE ANTONIO
+
 namespace DuffyExercise
 {
+    using ExtensionsRandom;
 
-
-    // BROWNINA MANAGER ---------------------------------------------------------------------------
+    // BROWNIAN MANAGER ---------------------------------------------------------------------------
     /// <summary>
     ///     Brownian Dispatcher. Given certain logic it delivers brownian motion to every risk Factor.
-    ///     Implement the dispatch method. klajasdfadsfasdfafa
+    ///     Implement the dispatch method.
     /// </summary>
     public class BrownianManager
     {
@@ -39,7 +39,6 @@ namespace DuffyExercise
         ///     Returns a value for a scalar risk factor for date and path.
         /// </summary>
         double getValue(string ID, double date, int path);
-
     }
 
     /// <summary>
@@ -47,7 +46,6 @@ namespace DuffyExercise
     /// </summary>
     public class Scenario : IScenario
     {
-
         #region IScenario Members
 
         public double getValue(string ID, double date, int path)
@@ -138,8 +136,48 @@ namespace DuffyExercise
         double[] nextSequence(int dim);
     }
 
-    // --------------------------------------------------------------------------------------
+    namespace ExtensionsRandom
+    {
+        /// <summary>
+        ///  Extending class Random (with "cow" method NextDouble) to have method NextGaussian
+        /// </summary>
+        public static class RandomExtensions
+        {
+            public static double NextGaussian(this System.Random rand, double mu = 0.0, double sigma = 1.0)
+            {
+                double u1 = rand.NextDouble();
+                double u2 = rand.NextDouble();
 
+                double rand_std_normal = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
+                double rand_normal = mu + sigma * rand_std_normal;
+
+                return rand_normal;
+            }
+        }
+    }    
+
+    public class BoxMuller : IGaussianGenerator
+    {        
+        public double next()
+        {
+            Random rand = new System.Random();
+            return rand.NextGaussian();
+        }
+
+        public double[] nextSequence(int dim)
+        {
+            double[] sequence = new double[dim];
+
+            for (int j = 0; j < dim; ++j)
+            {
+                sequence.SetValue(next(), j);
+            }
+
+            return sequence;
+        }
+    }
+    
+    // --------------------------------------------------------------------------------------
 
 
     // MONTE CARLO ENGINE -------------------------------------------------------------------
