@@ -6,6 +6,35 @@ namespace DuffyExercise
 {
     using ExtensionsRandom;
 
+    public class ScenarioKey //Key class to look for a value into the scenario Dictionary
+    {
+        public string _ID;
+        public double _date;
+        public int _path;
+
+        public bool Equals(ScenarioKey Key)
+        {
+            return (Key._ID == _ID && Key._date == _date && Key._path == _path);
+        }
+
+        public override bool Equals(Object obj)
+        {
+            return Equals(obj as ScenarioKey);
+        }
+        public override int GetHashCode()
+        {
+            return _ID.GetHashCode() ^ _date.GetHashCode() ^ _path.GetHashCode();
+        }
+
+        public ScenarioKey(string ID, double date, int path)
+        {
+            _ID = ID;
+            _date = date;
+            _path = path;
+        }
+
+    }
+
     // BROWNIAN MANAGER ---------------------------------------------------------------------------
     /// <summary>
     ///     Brownian Dispatcher. Given certain logic it delivers brownian motion to every risk Factor.
@@ -39,6 +68,7 @@ namespace DuffyExercise
         ///     Returns a value for a scalar risk factor for date and path.
         /// </summary>
         double getValue(string ID, double date, int path);
+        void setValue(string ID, double date, int path, double value);
     }
 
     /// <summary>
@@ -46,13 +76,46 @@ namespace DuffyExercise
     /// </summary>
     public class Scenario : IScenario
     {
+        //->ATTRIBUTES
+        //private List< Dictionary<string, Dictionary<double, double>> >_scenarios;
+        private Dictionary<ScenarioKey, double> _scenarios;
+
         #region IScenario Members
 
         public double getValue(string ID, double date, int path)
         {
-            throw new Exception("The method or operation is not implemented.");
+            try
+            {
+                return _scenarios[new ScenarioKey(ID,date,path)];
+            }
+            catch
+            {
+                throw new Exception("Scenario not found.");
+            }
+            
         }
 
+        public Scenario()
+        {
+            List<double> Dates =new List<double>(new double[]{40000, 40100, 40200, 40300, 40400, 40500, 40600, 40700, 40800, 40900 });
+            double DFstep = 0.015;
+            double EquitySpot = 9.89; //BBVA
+            _scenarios = new Dictionary<ScenarioKey, double>();   
+            //IR Curve
+
+            for (int i = 0; i < Dates.Count; i++)
+                _scenarios.Add(new ScenarioKey("IRCurve", Dates[i], 0), 1 - i*DFstep);
+
+            //Equity
+            _scenarios.Add(new ScenarioKey("BBVA", 40000, 0), EquitySpot);
+        }
+		
+		public void setValue(string ID, double date, int path, double value)
+		{
+		
+			_scenarios.Add(new ScenarioKey(ID, date, path), value);
+		}
+			
         #endregion
     }
 
@@ -113,8 +176,18 @@ namespace DuffyExercise
         public override void evolve(double dateFrom, double dateTo, int path, 
                                     IScenario scenario, double[] correlatedBrownians)
         {
+		double currentValue;
+		double nextValue;
+		try{
+		currentValue = scenario.getValue(ID,dateFrom,path);
+		nextValue = currentValue + correlatedBrownians[0];
+		scenario.setValue(ID, dateTo,path, nextValue);
+		}
+		catch{
+		
             throw new Exception("The method or operation is not implemented.");
         }
+		}
 
         public override int size(double date)
         {
@@ -321,14 +394,14 @@ namespace DuffyExercise
 
         // -> METHODS
         // -------------------------------
-        public void calculate(List<double> dates, int noSim)
+          public void calculate(List<double> dates, int noSim)
         {
             Scenario scenario =  new Scenario();
-
+            
             // -> CREATE SCENARIO ...
             for (int j = 0; j < noSim; ++j)
             {
-                for (int i = 0; i < dates.Count; ++i)
+                for (int i = 1; i < dates.Count; ++i)
                 {
                     // -> EVOLVE ..
                     _engine.evolve(dates[i - 1], dates[i], j, scenario);
