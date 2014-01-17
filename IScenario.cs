@@ -162,7 +162,6 @@ namespace DuffyExercise
         ///     Returns the number of Brownian Motions needed to evolve the Risk Factor
         /// </summary>
         public abstract int size(double date);
-
     }
 
 
@@ -172,11 +171,20 @@ namespace DuffyExercise
     public class EquityRiskFactor : RiskFactor
     {
         //ATTRIBUTES
-        private double volatility;
+        private double _vol;
+        private double _riskFreeRate;
 
         //CONSTRUCTOR
-        public EquityRiskFactor(string ID) : base(ID) { }
+        public EquityRiskFactor(string ID) : base(ID)
+        {
+            throw new Exception("EquityRiskFactor constructor must be called including values for vol and riskFreeRate!");
+        }
 
+        public EquityRiskFactor(string ID, double vol, double riskFreeRate) : base(ID)
+        {
+            _vol= vol;
+            _riskFreeRate = riskFreeRate;
+        }
 
         // -> METHODS
         // --------------------
@@ -185,16 +193,18 @@ namespace DuffyExercise
         {
             double currentValue;
             double nextValue;
+            double incT = dateTo - dateFrom;
             try
-            {
+            {                
                 currentValue = scenario.getValue(ID, dateFrom, path);
-                nextValue = currentValue + correlatedBrownians[0];
+                nextValue = currentValue * Math.Exp(_riskFreeRate*incT) 
+                                         * Math.Exp(- (Math.Pow(_vol, 2) * (incT/2)) )
+                                         * Math.Exp(_vol * Math.Sqrt(incT) * correlatedBrownians[0]);
                 scenario.setValue(ID, dateTo, path, nextValue);
             }
             catch
             {
-
-                throw new Exception("The method or operation is not implemented.");
+                throw new Exception("Error in method evolve of risk factor " + ID + " from date " + dateFrom);
             }
         }
 
