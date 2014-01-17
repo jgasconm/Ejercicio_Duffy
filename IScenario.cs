@@ -171,6 +171,13 @@ namespace DuffyExercise
     /// </summary>
     public class EquityRiskFactor : RiskFactor
     {
+        //ATTRIBUTES
+        private double volatility;
+
+        //CONSTRUCTOR
+        public EquityRiskFactor(string ID) : base(ID) { }
+
+
         // -> METHODS
         // --------------------
         public override void evolve(double dateFrom, double dateTo, int path,
@@ -274,7 +281,15 @@ namespace DuffyExercise
         BrownianManager _brownianManager;
         Correlator _correlator;
 
+        //CONSTRUCTOR
 
+        public Evolver()
+        {
+            _l_RiskFactors = new List<RiskFactor>();
+            _brownianManager = new BrownianManager();
+
+            _l_RiskFactors.Add(new EquityRiskFactor("BBVA"));
+        }
         // -> METHODS
         // ---------------------
 
@@ -284,6 +299,10 @@ namespace DuffyExercise
         public void evolve(double dateFrom, double dateTo, int path, IScenario scenario)
         {
 
+            foreach(RiskFactor Factor in _l_RiskFactors)
+            {
+                Factor.evolve(dateFrom, dateTo, path, scenario, correlatedBrownians);
+            }
 
 
         }
@@ -390,7 +409,13 @@ namespace DuffyExercise
 
         // CONSTRUCTOR (TO BE IMPLEMENTED)
         // -------------------------------
+        public MCEngine()
+        {
+            _engine = new Evolver();
+            _l_Instruments = new List<Instrument>();
+            _l_Metric = new List<Metric>();
 
+        }
 
 
 
@@ -399,6 +424,7 @@ namespace DuffyExercise
         public void calculate(List<double> dates, int noSim)
         {
             Scenario scenario = new Scenario();
+           
 
             // -> CREATE SCENARIO ...
             for (int j = 0; j < noSim; ++j)
