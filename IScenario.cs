@@ -40,18 +40,30 @@ namespace DuffyExercise
     ///     Brownian Dispatcher. Given certain logic it delivers brownian motion to every risk Factor.
     ///     Implement the dispatch method.
     /// </summary>
-    public class BrownianManager //Prueba prueba prueba >>>>
+    public class BrownianManager
     {
+        Dictionary<string, int> NumFactorsForEachID;
+        IGaussianGenerator _gaussianGenerator;
+
+        public BrownianManager(IGaussianGenerator gaussianGenerator)
+        {
+            gaussianGenerator = _gaussianGenerator;
+        }
+
         /// <summary>
         ///     Implements the logic for dispatching.
         /// </summary>
         public void initialize(List<RiskFactor> riskFactors)
         {
+            foreach(RiskFactor rf in riskFactors)
+            {
+                NumFactorsForEachID.Add(rf.ID, rf.size());
+            }
         }
 
-        public double[] dispatch(string sID, double[] brownianVector)
+        public double[] dispatch(string sID)
         {
-            throw (new ApplicationException("Method not implemented"));
+            return _gaussianGenerator.nextSequence(NumFactorsForEachID[sID]);
         }
     }
 
@@ -133,16 +145,13 @@ namespace DuffyExercise
         // --------------------
         private string _ID;
 
-
         // -> CONSTRCTOR
         // --------------------
         protected RiskFactor(string ID)
         {
             _ID = ID;
         }
-        protected RiskFactor()
-        {
-        }
+        protected RiskFactor() {}
 
         // -> ACCESORS
         // ------------------
@@ -154,14 +163,14 @@ namespace DuffyExercise
         public void evolve(double dateFrom, double dateTo, int path, IScenario scenario,
                                     double[] correlatedBrownians, BrownianManager brownianDispacther)
         {
-            evolve(dateFrom, dateTo, path, scenario, brownianDispacther.dispatch(ID, correlatedBrownians));
+            evolve(dateFrom, dateTo, path, scenario, brownianDispacther.dispatch(ID));
         }
         public abstract void evolve(double dateFrom, double dateTo, int path,
                                     IScenario scenario, double[] correlatedBrownians);
         /// <summary>
         ///     Returns the number of Brownian Motions needed to evolve the Risk Factor
         /// </summary>
-        public abstract int size(double date);
+        public abstract int size();
     }
 
 
@@ -208,7 +217,7 @@ namespace DuffyExercise
             }
         }
 
-        public override int size(double date)
+        public override int size()
         {
             return 1;
         }
@@ -275,9 +284,41 @@ namespace DuffyExercise
     // MONTE CARLO ENGINE -------------------------------------------------------------------
     public abstract class Correlator
     {
+        // This method has as input independent normals, correlates them and then multiplies by sqrt(deltaT) to have the Brownian Motion in the interval
         public abstract double[] correlate(double dateFrom, double dateTo, double[] independentBM);
     }
 
+    public class Cholesky : Correlator
+    {
+        double[,] correlMatrix;
+
+        public override double[] correlate(double dateFrom, double dateTo, double[] independentBM)
+        {
+            double[] correlatedBrownians;
+
+            ///
+            /// *^*¨* MISSING CHOLESKY DECOMPOSITION AND BASE CHANGE PROCESS
+            /// 
+
+            double sqrtDeltaT = Math.Sqrt(dateTo-dateFrom);
+
+            correlatedBrownians = choleskyMultiplication(independentBM);
+            for (int i = 0; i < correlatedBrownians.Length; i++)
+            {
+                correlatedBrownians[i] *= sqrtDeltaT;
+            }
+
+            return correlatedBrownians;
+        }
+
+        public double[] choleskyMultiplication(double[] independentNormals)
+        {
+            ///
+            /// *^*¨* MISSING CHOLESKY DECOMPOSITION AND BASE CHANGE PROCESS
+            /// 
+            return independentNormals; 
+        }
+    }
 
     /// <summary>
     ///     Class that evolves every Risk Factor .... 
@@ -296,8 +337,8 @@ namespace DuffyExercise
         public Evolver()
         {
             _l_RiskFactors = new List<RiskFactor>();
-            _brownianManager = new BrownianManager();
-
+            _gaussianGenerator = new BoxMuller();
+            _brownianManager = new BrownianManager(_gaussianGenerator);
             _l_RiskFactors.Add(new EquityRiskFactor("BBVA"));
         }
         // -> METHODS
@@ -308,9 +349,14 @@ namespace DuffyExercise
         /// </summary>
         public void evolve(double dateFrom, double dateTo, int path, IScenario scenario)
         {
+            _brownianManager.initialize(_l_RiskFactors);
+            double[] independentNormals; // Just the independent gaussian random numer
+            double[] correlatedBrownians; // Correlated brownian motion, including sqrt(deltaT)
 
             foreach(RiskFactor Factor in _l_RiskFactors)
             {
+                independentNormals = _brownianManager.dispatch(Factor.ID);
+                correlatedBrownians = _correlator.correlate(dateFrom, dateTo, independentNormals);
                 Factor.evolve(dateFrom, dateTo, path, scenario, correlatedBrownians);
             }
 
