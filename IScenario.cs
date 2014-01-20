@@ -47,7 +47,8 @@ namespace DuffyExercise
 
         public BrownianManager(IGaussianGenerator gaussianGenerator)
         {
-            gaussianGenerator = _gaussianGenerator;
+            _gaussianGenerator = gaussianGenerator;
+            NumFactorsForEachID = new Dictionary<string, int>();
         }
 
         /// <summary>
@@ -110,16 +111,12 @@ namespace DuffyExercise
         public Scenario()
         {
             List<double> Dates = new List<double>(new double[] { 40000, 40100, 40200, 40300, 40400, 40500, 40600, 40700, 40800, 40900 });
-            double DFstep = 0.015;
-            double EquitySpot = 9.89; //BBVA
+            double DFstep = 0.015;            
             _scenarios = new Dictionary<ScenarioKey, double>();
             //IR Curve
 
             for (int i = 0; i < Dates.Count; i++)
                 _scenarios.Add(new ScenarioKey("IRCurve", Dates[i], 0), 1 - i * DFstep);
-
-            //Equity
-            _scenarios.Add(new ScenarioKey("BBVA", 40000, 0), EquitySpot);
         }
 
         public void setValue(string ID, double date, int path, double value)
@@ -202,7 +199,7 @@ namespace DuffyExercise
         {
             double currentValue;
             double nextValue;
-            double incT = dateTo - dateFrom;
+            double incT = (dateTo - dateFrom) / 365.25;
             try
             {                
                 currentValue = scenario.getValue(ID, dateFrom, path);
@@ -290,7 +287,13 @@ namespace DuffyExercise
 
     public class Cholesky : Correlator
     {
-        double[,] correlMatrix;
+        double[,] _correlMatrix;
+
+        public double[,] CorrelMatrix
+        {
+            get {return _correlMatrix;}
+            set {_correlMatrix = value;}
+        }
 
         public override double[] correlate(double dateFrom, double dateTo, double[] independentBM)
         {
@@ -300,7 +303,7 @@ namespace DuffyExercise
             /// *^*¨* MISSING CHOLESKY DECOMPOSITION AND BASE CHANGE PROCESS
             /// 
 
-            double sqrtDeltaT = Math.Sqrt(dateTo-dateFrom);
+            double sqrtDeltaT = Math.Sqrt( (dateTo-dateFrom) / 365.25 );
 
             correlatedBrownians = choleskyMultiplication(independentBM);
             for (int i = 0; i < correlatedBrownians.Length; i++)
@@ -336,10 +339,14 @@ namespace DuffyExercise
 
         public Evolver()
         {
-            _l_RiskFactors = new List<RiskFactor>();
             _gaussianGenerator = new BoxMuller();
             _brownianManager = new BrownianManager(_gaussianGenerator);
-            _l_RiskFactors.Add(new EquityRiskFactor("BBVA"));
+            _correlator = new Cholesky();
+
+            _l_RiskFactors = new List<RiskFactor>();
+            _l_RiskFactors.Add(new EquityRiskFactor("BBVA", 0.20, 0.01));
+
+            _brownianManager.initialize(_l_RiskFactors);
         }
         // -> METHODS
         // ---------------------
@@ -349,7 +356,6 @@ namespace DuffyExercise
         /// </summary>
         public void evolve(double dateFrom, double dateTo, int path, IScenario scenario)
         {
-            _brownianManager.initialize(_l_RiskFactors);
             double[] independentNormals; // Just the independent gaussian random numer
             double[] correlatedBrownians; // Correlated brownian motion, including sqrt(deltaT)
 
@@ -359,10 +365,7 @@ namespace DuffyExercise
                 correlatedBrownians = _correlator.correlate(dateFrom, dateTo, independentNormals);
                 Factor.evolve(dateFrom, dateTo, path, scenario, correlatedBrownians);
             }
-
-
         }
-
     }
 
     // --------------------------------------------------------------------------------------
@@ -479,12 +482,14 @@ namespace DuffyExercise
         // -------------------------------
         public void calculate(List<double> dates, int noSim)
         {
-            Scenario scenario = new Scenario();
-           
+            Scenario scenario = new Scenario();           
 
             // -> CREATE SCENARIO ...
             for (int j = 0; j < noSim; ++j)
             {
+                double EquitySpot = 9.89; //BBVA
+                scenario.setValue("BBVA", dates[0], j, EquitySpot);
+
                 for (int i = 1; i < dates.Count; ++i)
                 {
                     // -> EVOLVE ..
