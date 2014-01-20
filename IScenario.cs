@@ -388,21 +388,28 @@ namespace DuffyExercise
         // -> ATTRIBUTES
         // -------------------
         Pricer _pricer;
-        InstrumentContract _InstrumentContract;
+        InstrumentContract _instrumentContract;
+
+        // Constructor
+        Instrument(Pricer pricer, InstrumentContract instrumentContract)
+        {
+            _pricer = pricer;
+            _instrumentContract = instrumentContract;
+        }
 
         // -> METHODS 
         // --------------------
         public virtual double price(double date, int path, IScenario scenario)
         {
-            return _pricer.price(date, path, _InstrumentContract, scenario);
+            return _pricer.price(date, path, _instrumentContract, scenario);
         }
-
 
         // -> ACCEORS & MODIFIERS
         // -----------------------
         public Pricer pricer { get { return _pricer; } set { _pricer = value; } }
-        public InstrumentContract instrumentContract { get { return _InstrumentContract; } set { _InstrumentContract = value; } }
+        public InstrumentContract instrumentContract { get { return _instrumentContract; } set { _instrumentContract = value; } }
     }
+
     /// <summary>
     ///     Information about the contractual agreement.
     ///     Populate with NEEDED ATTRIBUTES
@@ -411,14 +418,68 @@ namespace DuffyExercise
     {
         // -> ATTRIBUTES
         // -------------------
-
+        public abstract double Payoff(double underlyingValue);
     }
+
+    public class InstrumentCallPutPayoff : InstrumentContract
+    {
+        public enum PayoffType : uint
+        {
+            Call = 1,
+            Put = 2,
+        }
+
+        string _underlyingID;   // Underlying or risk factor to use in the payoff
+        double _strike;         // Strike level
+        PayoffType _optionType; // Option type ("call", "put")
+
+        InstrumentCallPutPayoff(string underlyingID, double strike, PayoffType optionType)
+        {
+            _underlyingID = underlyingID;
+            _strike = strike;
+            _optionType = optionType;
+        }
+
+        // -> ACCESORS & MODIFIERS
+        // -----------------------
+        public double strike { get { return _strike; } set { _strike = value; } }
+        public PayoffType optionType { get { return _optionType; } set { _optionType = value; } }
+        public string underlyingID { get { return _underlyingID; } set {_underlyingID = value; } }
+
+        public override double Payoff(double underlyingValue)
+        {
+            if (_optionType == PayoffType.Call)
+            {
+                return (Math.Max(underlyingValue - strike, 0.0));
+            }
+            else if (_optionType == PayoffType.Put)
+            {
+                return (Math.Max(strike - underlyingValue, 0.0));
+            }
+            else
+                throw new Exception("InstrumentCallPutPayoff optionType must be either Call or Put");
+        }
+    }
+
     /// <summary>
-    ///     Implementst the logic of pricing.
+    ///     Implements the logic of pricing.
     /// </summary>
     public abstract class Pricer
     {
         public abstract double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario);
+    }
+
+    public class PricerCallPutPayoff : Pricer
+    {
+        public override double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
+        {
+            InstrumentCallPutPayoff instrContractCallPut = instrumentContract as InstrumentCallPutPayoff;
+            if (instrContractCallPut != null)
+            {
+                return instrContractCallPut.Payoff(scenario.getValue(instrContractCallPut.underlyingID, date, path) );
+            }
+            throw new Exception("PricerCallPutPayoff expects a InstrumentCallPutPayoff as InstrumentContract");
+        }
     }
 
     // --------------------------------------------------------------------------------------
