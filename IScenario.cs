@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Data.OleDb;
+using System.Data;
+
 /// prueba de commit con tortoisegit
 namespace DuffyExercise
 {
@@ -110,13 +113,13 @@ namespace DuffyExercise
 
         public Scenario()
         {
-            List<double> Dates = new List<double>(new double[] { 40000, 40100, 40200, 40300, 40400, 40500, 40600, 40700, 40800, 40900 });
+            /*List<double> Dates = new List<double>(new double[] { 40000, 40100, 40200, 40300, 40400, 40500, 40600, 40700, 40800, 40900 });
             double DFstep = 0.015;            
             _scenarios = new Dictionary<ScenarioKey, double>();
             //IR Curve
 
             for (int i = 0; i < Dates.Count; i++)
-                _scenarios.Add(new ScenarioKey("IRCurve", Dates[i], 0), 1 - i * DFstep);
+                _scenarios.Add(new ScenarioKey("IRCurve", Dates[i], 0), 1 - i * DFstep);*/
         }
 
         public void setValue(string ID, double date, int path, double value)
@@ -294,6 +297,11 @@ namespace DuffyExercise
             get {return _correlMatrix;}
             set {_correlMatrix = value;}
         }
+        public Cholesky(double[,] correlMatrix)
+        {
+            _correlMatrix = correlMatrix;
+        }
+
 
         public override double[] correlate(double dateFrom, double dateTo, double[] independentBM)
         {
@@ -337,15 +345,12 @@ namespace DuffyExercise
 
         //CONSTRUCTOR
 
-        public Evolver()
+        public Evolver(List<RiskFactor> Equities, double [,] correlMatrix)
         {
             _gaussianGenerator = new BoxMuller();
             _brownianManager = new BrownianManager(_gaussianGenerator);
-            _correlator = new Cholesky();
-
-            _l_RiskFactors = new List<RiskFactor>();
-            _l_RiskFactors.Add(new EquityRiskFactor("BBVA", 0.20, 0.01));
-
+            _correlator = new Cholesky(correlMatrix);
+            _l_RiskFactors = Equities;
             _brownianManager.initialize(_l_RiskFactors);
         }
         // -> METHODS
@@ -470,13 +475,80 @@ namespace DuffyExercise
         // -------------------------------
         public MCEngine()
         {
-            _engine = new Evolver();
+            Initialize();
             _l_Instruments = new List<Instrument>();
             _l_Metric = new List<Metric>();
 
         }
 
+        public void Initialize() //Read Excel info 
+        {
+            List<double> SimDates;
+            List<RiskFactor> Equities;
+            double[,] CorrelationMatrix;
+            SimDates = ReadSimulationDates();
+            Equities = ReadEquities();
+            CorrelationMatrix = ReadCorrelationMatrix();
+            _engine = new Evolver(Equities, CorrelationMatrix);
 
+
+        }
+
+        public List<double> ReadSimulationDates()
+        {
+            List<double> Dates = new List<double>();
+            ReadRange RangeHandle = new ReadRange();
+            DataSet Dates_Data = RangeHandle.Read("SimDates");
+            DataRowCollection Row = Dates_Data.Tables["SimDates"].Rows;
+
+            foreach(DataRow DRow in Row)
+            {
+                Dates.Add(Convert.ToDouble(DRow[0]));
+            }
+
+            return Dates;
+
+        }
+
+        public List<RiskFactor> ReadEquities()
+        {
+            List<RiskFactor> Equities = new List<RiskFactor>();
+            ReadRange RangeHandle = new ReadRange();
+            DataSet Equity_Data = RangeHandle.Read("EquityFeatures");
+            DataSet Rate_Data = RangeHandle.Read("Rates");
+            DataRowCollection EquityRows = Equity_Data.Tables["EquityFeatures"].Rows;
+            DataColumnCollection EquityColumns = Equity_Data.Tables["EquityFeatures"].Columns;
+
+            DataRowCollection RateRows = Rate_Data.Tables["Rates"].Rows;
+
+            foreach (DataRow DRow in EquityRows)
+            {
+                Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(RateRows[0][1])));
+            }
+            return Equities;
+
+        }
+
+        public double[,] ReadCorrelationMatrix()
+        {
+            double[,] correlMatrix;
+            ReadRange Matrix_Range = new ReadRange();
+            DataSet Matrix_Data = Matrix_Range.Read("MatrixCorrelation");
+            DataColumnCollection Column = Matrix_Data.Tables["MatrixCorrelation"].Columns;
+            DataRowCollection Row = Matrix_Data.Tables["MatrixCorrelation"].Rows;
+
+            correlMatrix = new double[Row.Count, Column.Count];
+
+            for (int i = 0; i < Row.Count; i++)
+            {
+                for (int j = 0; j < Column.Count; j++)
+                {
+                    correlMatrix[i, j] = Convert.ToDouble(Row[i][j]);
+                }
+            }
+
+            return correlMatrix;
+        }
 
         // -> METHODS
         // -------------------------------
@@ -505,6 +577,25 @@ namespace DuffyExercise
                         metric.addNPVToMetric(dates[i], j, npv, scenario);
                 }
             }
+
+        }
+
+       
+    }
+
+    public class ReadRange
+    {
+        public DataSet Read(string RangeName)
+        {
+            String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=C:/Users/e024097/Documents/Visual Studio 2013/Projects/ConsoleApplication1/Book1.xls;Extended Properties=Excel 8.0;";
+            OleDbConnection objConn = new OleDbConnection(sConnectionString);
+            objConn.Open();
+            OleDbCommand objCmd = new OleDbCommand("SELECT * FROM " + RangeName, objConn);
+            OleDbDataAdapter Adapter = new OleDbDataAdapter(objCmd);
+            DataSet Data = new DataSet();
+            Adapter.Fill(Data, RangeName);
+            objConn.Close();
+            return Data;
 
         }
     }
