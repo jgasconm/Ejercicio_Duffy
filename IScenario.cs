@@ -111,15 +111,12 @@ namespace DuffyExercise
 
         }
 
-        public Scenario()
+        public Scenario(List<RiskFactor> RFList, double StartDate)
         {
-            /*List<double> Dates = new List<double>(new double[] { 40000, 40100, 40200, 40300, 40400, 40500, 40600, 40700, 40800, 40900 });
-            double DFstep = 0.015;            
-            _scenarios = new Dictionary<ScenarioKey, double>();
-            //IR Curve
-
-            for (int i = 0; i < Dates.Count; i++)
-                _scenarios.Add(new ScenarioKey("IRCurve", Dates[i], 0), 1 - i * DFstep);*/
+            foreach(RiskFactor RF in RFList)
+            {
+                setValue(RF.ID, StartDate, 0, RF.spot);
+            }
         }
 
         public void setValue(string ID, double date, int path, double value)
@@ -144,18 +141,21 @@ namespace DuffyExercise
         // -> ATTRIBUTES
         // --------------------
         private string _ID;
+        private double _spot;
 
         // -> CONSTRCTOR
         // --------------------
-        protected RiskFactor(string ID)
+        protected RiskFactor(string ID, double spot)
         {
             _ID = ID;
+            _spot = spot;
         }
         protected RiskFactor() {}
 
         // -> ACCESORS
         // ------------------
         public string ID { get { return _ID; } }
+        public double spot { get { return _spot; } }
 
 
         // -> ABSTRACT METHODS
@@ -184,12 +184,12 @@ namespace DuffyExercise
         private double _riskFreeRate;
 
         //CONSTRUCTOR
-        public EquityRiskFactor(string ID) : base(ID)
+        public EquityRiskFactor(string ID, double spot) : base(ID, spot)
         {
             throw new Exception("EquityRiskFactor constructor must be called including values for vol and riskFreeRate!");
         }
 
-        public EquityRiskFactor(string ID, double vol, double riskFreeRate) : base(ID)
+        public EquityRiskFactor(string ID, double spot, double vol, double riskFreeRate) : base(ID, spot)
         {
             _vol= vol;
             _riskFreeRate = riskFreeRate;
@@ -531,29 +531,29 @@ namespace DuffyExercise
         Evolver _engine;
         List<Instrument> _l_Instruments;
         List<Metric> _l_Metric;
+        List<double> _simDates;
+        Scenario _scenario;
 
         // CONSTRUCTOR (TO BE IMPLEMENTED)
         // -------------------------------
         public MCEngine()
         {
-            Initialize();
+
             _l_Instruments = new List<Instrument>();
             _l_Metric = new List<Metric>();
 
-        }
-
-        public void Initialize() //Read Excel info 
-        {
-            List<double> SimDates;
+            //Read Excel info and fill Attributes
             List<RiskFactor> Equities;
             double[,] CorrelationMatrix;
-            SimDates = ReadSimulationDates();
+            _simDates = ReadSimulationDates();
             Equities = ReadEquities();
             CorrelationMatrix = ReadCorrelationMatrix();
             _engine = new Evolver(Equities, CorrelationMatrix);
+            _scenario = new Scenario(Equities, _simDates[0]);
 
 
         }
+
 
         public List<double> ReadSimulationDates()
         {
@@ -584,7 +584,7 @@ namespace DuffyExercise
 
             foreach (DataRow DRow in EquityRows)
             {
-                Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(RateRows[0][1])));
+                Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(DRow[2]), Convert.ToDouble(RateRows[0][1])));
             }
             return Equities;
 
@@ -615,27 +615,25 @@ namespace DuffyExercise
         // -------------------------------
         public void calculate(List<double> dates, int noSim)
         {
-            Scenario scenario = new Scenario();           
+     
 
             // -> CREATE SCENARIO ...
             for (int j = 0; j < noSim; ++j)
             {
-                double EquitySpot = 9.89; //BBVA
-                scenario.setValue("BBVA", dates[0], j, EquitySpot);
 
                 for (int i = 1; i < dates.Count; ++i)
                 {
                     // -> EVOLVE ..
-                    _engine.evolve(dates[i - 1], dates[i], j, scenario);
+                    _engine.evolve(dates[i - 1], dates[i], j, _scenario);
 
                     // -> PRICE
                     double npv = 0.0;
                     for (int k = 0; k < _l_Instruments.Count; ++k)
-                        npv += _l_Instruments[k].price(dates[i], j, scenario);
+                        npv += _l_Instruments[k].price(dates[i], j, _scenario);
 
                     // -> CALL TO METRIC TO TAKE INTO ACCOUNT THE NPV
                     foreach (Metric metric in _l_Metric)
-                        metric.addNPVToMetric(dates[i], j, npv, scenario);
+                        metric.addNPVToMetric(dates[i], j, npv, _scenario);
                 }
             }
 
