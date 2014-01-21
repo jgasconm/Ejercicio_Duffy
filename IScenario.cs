@@ -415,26 +415,31 @@ namespace DuffyExercise
     {
         // -> ATTRIBUTES
         // -------------------
-        public abstract double Payoff(double underlyingValue);
+        public abstract double Payoff(double underlyingValue, double nominal);
     }
 
-    public class InstrumentCallPutPayoff : InstrumentContract
+    public class InstrumentContractPayoff : InstrumentContract
     {
         public enum PayoffType : uint
         {
             Call = 1,
             Put = 2,
+            Forward =3,
         }
 
         string _underlyingID;   // Underlying or risk factor to use in the payoff
         double _strike;         // Strike level
         PayoffType _optionType; // Option type ("call", "put")
+        double _optionDate;
+        double _nominal;
 
-        public InstrumentCallPutPayoff(string underlyingID, double strike, PayoffType optionType)
+        public InstrumentContractPayoff(string underlyingID, double strike, PayoffType optionType, double optionDate, double nominal)
         {
             _underlyingID = underlyingID;
             _strike = strike;
             _optionType = optionType;
+            _optionDate = optionDate;
+            _nominal = nominal;
         }
 
         // -> ACCESORS & MODIFIERS
@@ -442,16 +447,22 @@ namespace DuffyExercise
         public double strike { get { return _strike; } set { _strike = value; } }
         public PayoffType optionType { get { return _optionType; } set { _optionType = value; } }
         public string underlyingID { get { return _underlyingID; } set {_underlyingID = value; } }
+        public double optionDate { get { return _optionDate; } set { _optionDate = value; } }
+        public double nominal { get { return _nominal; } set { _nominal = value; } }
 
-        public override double Payoff(double underlyingValue)
+        public override double Payoff(double underlyingValue, double nominal)
         {
             if (_optionType == PayoffType.Call)
             {
-                return (Math.Max(underlyingValue - strike, 0.0));
+                return nominal * (Math.Max(underlyingValue - strike, 0.0));
             }
             else if (_optionType == PayoffType.Put)
             {
-                return (Math.Max(strike - underlyingValue, 0.0));
+                return nominal * (Math.Max(strike - underlyingValue, 0.0));
+            }
+            else if (_optionType == PayoffType.Forward)
+            {
+                return nominal * (underlyingValue - strike);
             }
             else
                 throw new Exception("InstrumentCallPutPayoff optionType must be either Call or Put");
@@ -466,14 +477,16 @@ namespace DuffyExercise
         public abstract double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario);
     }
 
-    public class PricerCallPutPayoff : Pricer
+    public class PricerPayoff : Pricer
     {
         public override double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
         {
-            InstrumentCallPutPayoff instrContractCallPut = instrumentContract as InstrumentCallPutPayoff;
-            if (instrContractCallPut != null)
+            InstrumentContractPayoff instrContractPayOff = instrumentContract as InstrumentContractPayoff;
+            if (instrContractPayOff != null)
             {
-                return instrContractCallPut.Payoff(scenario.getValue(instrContractCallPut.underlyingID, date, path) );
+                return instrContractPayOff.Payoff(scenario.getValue(instrContractPayOff.underlyingID, 
+                                                                     instrContractPayOff.optionDate, path), 
+                                                                     instrContractPayOff.nominal);
             }
             throw new Exception("PricerCallPutPayoff expects a InstrumentCallPutPayoff as InstrumentContract");
         }
@@ -538,12 +551,6 @@ namespace DuffyExercise
 
             _l_Instruments = new List<Instrument>();
             _l_Metric = new List<Metric>();
-
-            // Creating instruments for our portfolio
-            InstrumentCallPutPayoff contractCallBBVA = new InstrumentCallPutPayoff("BBVA", 10.0, InstrumentCallPutPayoff.PayoffType.Call);
-            PricerCallPutPayoff pricerCall = new PricerCallPutPayoff();
-            Instrument instrumentCall = new Instrument(pricerCall, contractCallBBVA);
-            _l_Instruments.Add(instrumentCall);
 
             //Read Excel info and fill Attributes
             List<RiskFactor> Equities;
@@ -610,6 +617,30 @@ namespace DuffyExercise
             }
 
             return correlMatrix;
+        }
+
+        public List<Instrument> ReadInstruments()
+        {
+            // Reading instrument contracts for our portfolio
+
+            List<Instrument> instruments = new List<Instrument>();
+            ReadRange Instrument_Range = new ReadRange();
+            DataSet Instrument_Data = Instrument_Range.Read("Instruments");
+            DataColumnCollection Column = Instrument_Data.Tables["Instruments"].Columns;
+            DataRowCollection Rows = Instrument_Data.Tables["Instruments"].Rows;
+
+            foreach(DataRow Row in Rows)
+            {
+                InstrumentContractPayoff contract = new InstrumentContractPayoff(Convert.ToString(Row[0]), 
+                                                                                Convert.ToDouble(Row[1]),
+                                                                                (InstrumentContractPayoff.PayoffType)Convert.ToUInt32(Row[2]), 
+                                                                                Convert.ToDouble(Row[3]), 
+                                                                                Convert.ToDouble(Row[4]));
+                PricerPayoff pricer = new PricerPayoff();
+                instruments.Add(new Instrument(pricer, contract));
+            }
+
+            return instruments;
         }
 
         // -> METHODS
