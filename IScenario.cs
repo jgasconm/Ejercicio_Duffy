@@ -386,7 +386,7 @@ namespace DuffyExercise
         InstrumentContract _instrumentContract;
 
         // Constructor
-        Instrument(Pricer pricer, InstrumentContract instrumentContract)
+        public Instrument(Pricer pricer, InstrumentContract instrumentContract)
         {
             _pricer = pricer;
             _instrumentContract = instrumentContract;
@@ -428,7 +428,7 @@ namespace DuffyExercise
         double _strike;         // Strike level
         PayoffType _optionType; // Option type ("call", "put")
 
-        InstrumentCallPutPayoff(string underlyingID, double strike, PayoffType optionType)
+        public InstrumentCallPutPayoff(string underlyingID, double strike, PayoffType optionType)
         {
             _underlyingID = underlyingID;
             _strike = strike;
@@ -535,9 +535,11 @@ namespace DuffyExercise
             _l_Instruments = new List<Instrument>();
             _l_Metric = new List<Metric>();
 
+            InstrumentCallPutPayoff contractCallBBVA = new InstrumentCallPutPayoff("BBVA", 10.0, InstrumentCallPutPayoff.PayoffType.Call);
+            PricerCallPutPayoff pricerCall = new PricerCallPutPayoff();
+            Instrument instrumentCall = new Instrument(pricerCall, contractCallBBVA);
+            _l_Instruments.Add(instrumentCall);
         }
-
-
 
         // -> METHODS
         // -------------------------------
