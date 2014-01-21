@@ -578,7 +578,8 @@ namespace DuffyExercise
             DataColumnCollection EquityColumns = Equity_Data.Tables["EquityFeatures"].Columns;
 
             DataRowCollection RateRows = Rate_Data.Tables["Rates"].Rows;
-
+            string prueba = Convert.ToString(EquityRows[0][0]);
+            Console.WriteLine(prueba);
             foreach (DataRow DRow in EquityRows)
             {
                 Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(DRow[2]), Convert.ToDouble(RateRows[0][1])));
