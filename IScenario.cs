@@ -38,6 +38,35 @@ namespace DuffyExercise
 
     }
 
+    public class NPVKey //Key class to look for a value into the NPV Dictionary
+    {
+        public double _date;
+        public int _path;
+
+        public bool Equals(NPVKey Key)
+        {
+            return (Key._date == _date && Key._path == _path);
+        }
+
+        public override bool Equals(Object obj)
+        {
+            return Equals(obj as NPVKey);
+        }
+        public override int GetHashCode()
+        {
+            return _date.GetHashCode() ^ _path.GetHashCode();
+        }
+
+        public NPVKey(double date, int path)
+        {
+            _date = date;
+            _path = path;
+        }
+
+    }
+
+
+
     // BROWNIAN MANAGER ---------------------------------------------------------------------------
     /// <summary>
     ///     Brownian Dispatcher. Given certain logic it delivers brownian motion to every risk Factor.
@@ -501,6 +530,7 @@ namespace DuffyExercise
 
     public abstract class Metric
     {
+        protected static Dictionary<NPVKey, double>  _NPVList;
         public abstract void addNPVToMetric(double date, int path, double NPV, IScenario scenario);
         public abstract void writeToConsole();
     }
@@ -509,14 +539,17 @@ namespace DuffyExercise
     /// </summary>
     public class Histogram : Metric
     {
+        private List<double> _distribution;
+
         public Histogram(List<double> distribution)
         {
-
+            _NPVList = new Dictionary<NPVKey, double>;
+            _distribution = distribution;
         }
 
         public override void addNPVToMetric(double date, int path, double NPV, IScenario scenario)
         {
-            throw new Exception("The method or operation is not implemented.");
+            _NPVList.Add(new NPVKey(date, path), NPV);  
         }
         public override void writeToConsole()
         {
@@ -558,6 +591,7 @@ namespace DuffyExercise
             _simDates = ReadSimulationDates();
             Equities = ReadEquities();
             CorrelationMatrix = ReadCorrelationMatrix();
+            _l_Instruments = ReadInstruments();
             _engine = new Evolver(Equities, CorrelationMatrix);
             _scenario = new Scenario(Equities, _simDates[0]);
         }
@@ -688,7 +722,7 @@ namespace DuffyExercise
     {
         public DataSet Read(string RangeName)
         {
-            String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=C:\\dev\\QUANTs\\Ejercicio_Duffy\\Duffy_Interface.xls;Extended Properties=Excel 8.0;";
+            String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source="+System.Environment.CurrentDirectory+"/Duffy_Interface.xls;Extended Properties=Excel 8.0;";
             OleDbConnection objConn = new OleDbConnection(sConnectionString);
             objConn.Open();
             OleDbCommand objCmd = new OleDbCommand("SELECT * FROM " + RangeName, objConn);
