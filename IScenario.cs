@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Data.OleDb;
+using System.Data;
+
 /// prueba de commit con tortoisegit
 namespace DuffyExercise
 {
@@ -108,15 +111,9 @@ namespace DuffyExercise
 
         }
 
-        public Scenario()
+        public Scenario(List<RiskFactor> RFList, double StartDate)
         {
-            List<double> Dates = new List<double>(new double[] { 40000, 40100, 40200, 40300, 40400, 40500, 40600, 40700, 40800, 40900 });
-            double DFstep = 0.015;            
             _scenarios = new Dictionary<ScenarioKey, double>();
-            //IR Curve
-
-            for (int i = 0; i < Dates.Count; i++)
-                _scenarios.Add(new ScenarioKey("IRCurve", Dates[i], 0), 1 - i * DFstep);
         }
 
         public void setValue(string ID, double date, int path, double value)
@@ -141,18 +138,21 @@ namespace DuffyExercise
         // -> ATTRIBUTES
         // --------------------
         private string _ID;
+        private double _spot;
 
         // -> CONSTRCTOR
         // --------------------
-        protected RiskFactor(string ID)
+        protected RiskFactor(string ID, double spot)
         {
             _ID = ID;
+            _spot = spot;
         }
         protected RiskFactor() {}
 
         // -> ACCESORS
         // ------------------
         public string ID { get { return _ID; } }
+        public double spot { get { return _spot; } }
 
 
         // -> ABSTRACT METHODS
@@ -181,12 +181,12 @@ namespace DuffyExercise
         private double _riskFreeRate;
 
         //CONSTRUCTOR
-        public EquityRiskFactor(string ID) : base(ID)
+        public EquityRiskFactor(string ID, double spot) : base(ID, spot)
         {
             throw new Exception("EquityRiskFactor constructor must be called including values for vol and riskFreeRate!");
         }
 
-        public EquityRiskFactor(string ID, double vol, double riskFreeRate) : base(ID)
+        public EquityRiskFactor(string ID, double spot, double vol, double riskFreeRate) : base(ID, spot)
         {
             _vol= vol;
             _riskFreeRate = riskFreeRate;
@@ -294,6 +294,11 @@ namespace DuffyExercise
             get {return _correlMatrix;}
             set {_correlMatrix = value;}
         }
+        public Cholesky(double[,] correlMatrix)
+        {
+            _correlMatrix = correlMatrix;
+        }
+
 
         public override double[] correlate(double dateFrom, double dateTo, double[] independentBM)
         {
@@ -336,16 +341,13 @@ namespace DuffyExercise
         Correlator _correlator;
 
         //CONSTRUCTOR
-
-        public Evolver()
+        public List<RiskFactor> RiskFactors { get { return _l_RiskFactors; } }
+        public Evolver(List<RiskFactor> Equities, double [,] correlMatrix)
         {
             _gaussianGenerator = new BoxMuller();
             _brownianManager = new BrownianManager(_gaussianGenerator);
-            _correlator = new Cholesky();
-
-            _l_RiskFactors = new List<RiskFactor>();
-            _l_RiskFactors.Add(new EquityRiskFactor("BBVA", 0.20, 0.01));
-
+            _correlator = new Cholesky(correlMatrix);
+            _l_RiskFactors = Equities;
             _brownianManager.initialize(_l_RiskFactors);
         }
         // -> METHODS
@@ -526,53 +528,149 @@ namespace DuffyExercise
         Evolver _engine;
         List<Instrument> _l_Instruments;
         List<Metric> _l_Metric;
+        List<double> _simDates;
+        Scenario _scenario;
 
         // CONSTRUCTOR (TO BE IMPLEMENTED)
         // -------------------------------
         public MCEngine()
         {
-            _engine = new Evolver();
+
             _l_Instruments = new List<Instrument>();
             _l_Metric = new List<Metric>();
 
+            // Creating instruments for our portfolio
             InstrumentCallPutPayoff contractCallBBVA = new InstrumentCallPutPayoff("BBVA", 10.0, InstrumentCallPutPayoff.PayoffType.Call);
             PricerCallPutPayoff pricerCall = new PricerCallPutPayoff();
             Instrument instrumentCall = new Instrument(pricerCall, contractCallBBVA);
             _l_Instruments.Add(instrumentCall);
+
+            //Read Excel info and fill Attributes
+            List<RiskFactor> Equities;
+            double[,] CorrelationMatrix;
+            _simDates = ReadSimulationDates();
+            Equities = ReadEquities();
+            CorrelationMatrix = ReadCorrelationMatrix();
+            _engine = new Evolver(Equities, CorrelationMatrix);
+            _scenario = new Scenario(Equities, _simDates[0]);
+        }
+
+        public List<double> ReadSimulationDates()
+        {
+            List<double> Dates = new List<double>();
+            ReadRange RangeHandle = new ReadRange();
+            DataSet Dates_Data = RangeHandle.Read("SimDates");
+            DataRowCollection Row = Dates_Data.Tables["SimDates"].Rows;
+
+            foreach(DataRow DRow in Row)
+            {
+                Dates.Add(Convert.ToDouble(DRow[0]));
+            }
+
+            return Dates;
+
+        }
+
+        public List<RiskFactor> ReadEquities()
+        {
+            List<RiskFactor> Equities = new List<RiskFactor>();
+            ReadRange RangeHandle = new ReadRange();
+            DataSet Equity_Data = RangeHandle.Read("EquityFeatures");
+            DataSet Rate_Data = RangeHandle.Read("Rates");
+            DataRowCollection EquityRows = Equity_Data.Tables["EquityFeatures"].Rows;
+            DataColumnCollection EquityColumns = Equity_Data.Tables["EquityFeatures"].Columns;
+
+            DataRowCollection RateRows = Rate_Data.Tables["Rates"].Rows;
+
+            foreach (DataRow DRow in EquityRows)
+            {
+                Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(DRow[2]), Convert.ToDouble(RateRows[0][1])));
+            }
+            return Equities;
+
+        }
+
+        public double[,] ReadCorrelationMatrix()
+        {
+            double[,] correlMatrix;
+            ReadRange Matrix_Range = new ReadRange();
+            DataSet Matrix_Data = Matrix_Range.Read("CorrelationMatrix");
+            DataColumnCollection Column = Matrix_Data.Tables["CorrelationMatrix"].Columns;
+            DataRowCollection Row = Matrix_Data.Tables["CorrelationMatrix"].Rows;
+
+            correlMatrix = new double[Row.Count, Column.Count-1];
+
+            for (int i = 0; i < Row.Count; i++)
+            {
+                for (int j = 1; j < Column.Count; j++)
+                {
+                   correlMatrix[i, j-1] = Convert.ToDouble(Row[i][j]);
+                }
+            }
+
+            return correlMatrix;
         }
 
         // -> METHODS
         // -------------------------------
         public void calculate(List<double> dates, int noSim)
         {
-            Scenario scenario = new Scenario();           
+     
 
             // -> CREATE SCENARIO ...
             for (int j = 0; j < noSim; ++j)
             {
-                double EquitySpot = 9.89; //BBVA
-                scenario.setValue("BBVA", dates[0], j, EquitySpot);
-
+                InitializePath(j);
                 for (int i = 1; i < dates.Count; ++i)
                 {
                     // -> EVOLVE ..
-                    _engine.evolve(dates[i - 1], dates[i], j, scenario);
+                    _engine.evolve(dates[i - 1], dates[i], j, _scenario);
 
                     // -> PRICE
                     double npv = 0.0;
                     for (int k = 0; k < _l_Instruments.Count; ++k)
-                        npv += _l_Instruments[k].price(dates[i], j, scenario);
+                        npv += _l_Instruments[k].price(dates[i], j, _scenario);
 
                     // -> CALL TO METRIC TO TAKE INTO ACCOUNT THE NPV
                     foreach (Metric metric in _l_Metric)
-                        metric.addNPVToMetric(dates[i], j, npv, scenario);
+                        metric.addNPVToMetric(dates[i], j, npv, _scenario);
                 }
             }
+
+        }
+
+        public void InitializePath(int i)
+        {
+            List<RiskFactor> RFList = _engine.RiskFactors;
+            foreach (RiskFactor RF in RFList)
+            {
+                _scenario.setValue(RF.ID, _simDates[0], i, RF.spot);
+            }
+        }
+
+
+       
+    }
+
+    public class ReadRange
+    {
+        public DataSet Read(string RangeName)
+        {
+            String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=C:\\dev\\QUANTs\\Ejercicio_Duffy\\Duffy_Interface.xls;Extended Properties=Excel 8.0;";
+            OleDbConnection objConn = new OleDbConnection(sConnectionString);
+            objConn.Open();
+            OleDbCommand objCmd = new OleDbCommand("SELECT * FROM " + RangeName, objConn);
+            OleDbDataAdapter Adapter = new OleDbDataAdapter(objCmd);
+            DataSet Data = new DataSet();
+            Adapter.Fill(Data, RangeName);
+            objConn.Close();
+            return Data;
+
+
 
         }
     }
 
     // --------------------------------------------------------------------------------------
-
 
 }
