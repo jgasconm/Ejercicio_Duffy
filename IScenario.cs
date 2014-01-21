@@ -113,10 +113,7 @@ namespace DuffyExercise
 
         public Scenario(List<RiskFactor> RFList, double StartDate)
         {
-            foreach(RiskFactor RF in RFList)
-            {
-                setValue(RF.ID, StartDate, 0, RF.spot);
-            }
+            _scenarios = new Dictionary<ScenarioKey, double>();
         }
 
         public void setValue(string ID, double date, int path, double value)
@@ -344,7 +341,7 @@ namespace DuffyExercise
         Correlator _correlator;
 
         //CONSTRUCTOR
-
+        public List<RiskFactor> RiskFactors { get { return _l_RiskFactors; } }
         public Evolver(List<RiskFactor> Equities, double [,] correlMatrix)
         {
             _gaussianGenerator = new BoxMuller();
@@ -594,17 +591,17 @@ namespace DuffyExercise
         {
             double[,] correlMatrix;
             ReadRange Matrix_Range = new ReadRange();
-            DataSet Matrix_Data = Matrix_Range.Read("MatrixCorrelation");
-            DataColumnCollection Column = Matrix_Data.Tables["MatrixCorrelation"].Columns;
-            DataRowCollection Row = Matrix_Data.Tables["MatrixCorrelation"].Rows;
+            DataSet Matrix_Data = Matrix_Range.Read("CorrelationMatrix");
+            DataColumnCollection Column = Matrix_Data.Tables["CorrelationMatrix"].Columns;
+            DataRowCollection Row = Matrix_Data.Tables["CorrelationMatrix"].Rows;
 
-            correlMatrix = new double[Row.Count, Column.Count];
+            correlMatrix = new double[Row.Count, Column.Count-1];
 
             for (int i = 0; i < Row.Count; i++)
             {
-                for (int j = 0; j < Column.Count; j++)
+                for (int j = 1; j < Column.Count; j++)
                 {
-                    correlMatrix[i, j] = Convert.ToDouble(Row[i][j]);
+                   correlMatrix[i, j-1] = Convert.ToDouble(Row[i][j]);
                 }
             }
 
@@ -620,7 +617,7 @@ namespace DuffyExercise
             // -> CREATE SCENARIO ...
             for (int j = 0; j < noSim; ++j)
             {
-
+                InitializePath(j);
                 for (int i = 1; i < dates.Count; ++i)
                 {
                     // -> EVOLVE ..
@@ -639,6 +636,16 @@ namespace DuffyExercise
 
         }
 
+        public void InitializePath(int i)
+        {
+            List<RiskFactor> RFList = _engine.RiskFactors;
+            foreach (RiskFactor RF in RFList)
+            {
+                _scenario.setValue(RF.ID, _simDates[0], i, RF.spot);
+            }
+        }
+
+
        
     }
 
@@ -646,7 +653,7 @@ namespace DuffyExercise
     {
         public DataSet Read(string RangeName)
         {
-            String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=C:/Users/e024097/Documents/Visual Studio 2013/Projects/ConsoleApplication1/Book1.xls;Extended Properties=Excel 8.0;";
+            String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=C:\\dev\\QUANTs\\Ejercicio_Duffy\\Duffy_Interface.xls;Extended Properties=Excel 8.0;";
             OleDbConnection objConn = new OleDbConnection(sConnectionString);
             objConn.Open();
             OleDbCommand objCmd = new OleDbCommand("SELECT * FROM " + RangeName, objConn);
@@ -656,10 +663,11 @@ namespace DuffyExercise
             objConn.Close();
             return Data;
 
+
+
         }
     }
 
     // --------------------------------------------------------------------------------------
-
 
 }
