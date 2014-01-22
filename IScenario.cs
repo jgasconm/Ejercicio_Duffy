@@ -328,18 +328,18 @@ namespace DuffyExercise
             _correlMatrix = correlMatrix;
         }
 
-
-        public override double[] correlate(double dateFrom, double dateTo, double[] independentBM)
+        // Input: independent NORMALS
+        // Output: correlated BROWNIANS (normal * sqrt(deltaT))
+        public override double[] correlate(double dateFrom, double dateTo, double[] independentNormals)
         {
             double[] correlatedBrownians;
+            double[][] _baseChangeMatrix;
 
-            ///
-            /// *^*¨* MISSING CHOLESKY DECOMPOSITION AND BASE CHANGE PROCESS
-            /// 
+            _baseChangeMatrix = choleskyFactorization(_correlMatrix);
+            correlatedBrownians = baseChangeMultiplication(_baseChangeMatrix, independentNormals);
 
-            double sqrtDeltaT = Math.Sqrt( (dateTo-dateFrom) / 365.25 );
-
-            correlatedBrownians = choleskyMultiplication(independentBM);
+            double sqrtDeltaT = Math.Sqrt((dateTo - dateFrom) / 365.25);
+            
             for (int i = 0; i < correlatedBrownians.Length; i++)
             {
                 correlatedBrownians[i] *= sqrtDeltaT;
@@ -348,12 +348,56 @@ namespace DuffyExercise
             return correlatedBrownians;
         }
 
-        public double[] choleskyMultiplication(double[] independentNormals)
+        // Supposing a square correlation matrix!
+        public double[] baseChangeMultiplication(double[][] baseChangeMatrix, double[] independentNormals)
         {
-            ///
-            /// *^*¨* MISSING CHOLESKY DECOMPOSITION AND BASE CHANGE PROCESS
-            /// 
-            return independentNormals; 
+            int dimens = CorrelMatrix.GetLength(0);
+            double[] correlatedNormals = new double[dimens];
+
+            for (int i = 0; i < dimens; i++)
+            {
+                double sum = 0.0;
+                for (int j = i; j < dimens; j++)
+                {
+                   sum += baseChangeMatrix[i][j] * independentNormals[j];
+                }
+                correlatedNormals[i] = sum;
+            }
+
+            return correlatedNormals;
+        }
+
+        public double[][] choleskyFactorization(double[,] CorrelMatrix)
+        {
+            // Just uses lower triangular correlation matrix.
+            // Therefore a triangular jagged array can be received 
+            // (although the routine works with a square array).
+
+            // It returns a lower triangular jagged array.
+
+            double sum;
+            int k;
+            int dimens = CorrelMatrix.GetLength(0);
+
+            double[][] result = new double[dimens][];
+            for (int i = 0; i < dimens; i++) result[i] = new double[i + 1];
+
+            for (int i = 0; i < dimens; i++)
+            {
+                for (int j = i; j < dimens; j++)
+                {
+                    for (sum = CorrelMatrix[j,i], k = i - 1; k >= 0; k--) sum -= result[i][k] * result[j][k];
+                    if (i == j)
+                    {
+                        if (sum <= 0.0)
+                            throw new Exception("Non semi-positive definite matrix.");
+                        result[i][i] = Math.Sqrt(sum);
+                    }
+                    else result[j][i] = sum / result[i][i];
+                }
+            }
+
+            return result;
         }
     }
 
