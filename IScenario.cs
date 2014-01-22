@@ -628,13 +628,15 @@ namespace DuffyExercise
 
         public override void addNPVToMetric(double date, int path, double NPV, IScenario scenario)
         {
-            if(_NPVList[date] == null)
+            List<double> NPVdate;
+            if(_NPVList.TryGetValue(date,out NPVdate) == false)
             {
                 List<double> newList = new List<double>();
                 newList.Add(NPV);
+                _NPVList.Add(date, newList);
             }
             else
-                _NPVList[date].Add(NPV);  
+                NPVdate.Add(NPV);  
         }
         public override void showMetric()
         {
@@ -646,24 +648,31 @@ namespace DuffyExercise
         public void HistogramByDate(double date)
         {
             List<double> NPVs = new List<double>(_NPVList[date]);
-            List<double> probability = new List<double>(_nBars);
+            double[] probability = new double[_nBars];
             NPVs.Sort();
             
             double max = NPVs[0];
             double min = NPVs[NPVs.Count - 1];
             double range = NPVs[NPVs.Count - 1] - NPVs[0];
-            double step = (1 / _nBars) * range;
+            double step = (1.0 / (_nBars -1)) * range;
             int k = 0;
             double bound = step;
             for (int i = 0; i < NPVs.Count; i++)
             {
-                if (NPVs[i] <= bound)
+
+                while ((NPVs[i] - NPVs[0]) > bound)
+                {
+                    k++;
+                    bound += step;
+                }
+                probability[k] += 1;
+                /*if ((NPVs[i]-NPVs[0]) <= bound)
                     probability[k] += 1;
                 else
                 {
                     k++;
                     bound += step;
-                }
+                }*/
             }
 
 
@@ -695,6 +704,7 @@ namespace DuffyExercise
         List<Metric> _l_Metric;
         List<double> _simDates;
         Scenario _scenario;
+        int _nSimulations;
 
         // CONSTRUCTOR (TO BE IMPLEMENTED)
         // -------------------------------
@@ -703,6 +713,7 @@ namespace DuffyExercise
 
             _l_Instruments = new List<Instrument>();
             _l_Metric = new List<Metric>();
+            _l_Metric.Add(new Histogram(10));
 
             //Read Excel info and fill Attributes
             List<RiskFactor> Equities;
@@ -711,6 +722,7 @@ namespace DuffyExercise
             Equities = ReadEquities();
             CorrelationMatrix = ReadCorrelationMatrix();
             _l_Instruments = ReadInstruments(Equities);
+            _nSimulations = ReadSimulationData();
             _engine = new Evolver(Equities, CorrelationMatrix);
             _scenario = new Scenario(Equities, _simDates[0]);
         }
@@ -731,20 +743,28 @@ namespace DuffyExercise
 
         }
 
+        public int ReadSimulationData()
+        {
+            List<double> Dates = new List<double>();
+            ReadRange RangeHandle = new ReadRange();
+            DataSet Dates_Data = RangeHandle.Read("Rates");
+            DataRowCollection Row = Dates_Data.Tables["Rates"].Rows;
+            return Convert.ToInt16(Row[0][1]);
+
+        }
+
         public List<RiskFactor> ReadEquities()
         {
             List<RiskFactor> Equities = new List<RiskFactor>();
             ReadRange RangeHandle = new ReadRange();
-            DataSet Equity_Data = RangeHandle.Read("EquityFeatures");
-            DataSet Rate_Data = RangeHandle.Read("Rates");
-            DataRowCollection EquityRows = Equity_Data.Tables["EquityFeatures"].Rows;
-            DataColumnCollection EquityColumns = Equity_Data.Tables["EquityFeatures"].Columns;
-
-            DataRowCollection RateRows = Rate_Data.Tables["Rates"].Rows;
+            DataSet Equity_Data = RangeHandle.Read("EquityProperties");
+            DataRowCollection EquityRows = Equity_Data.Tables["EquityProperties"].Rows;
+            DataColumnCollection EquityColumns = Equity_Data.Tables["EquityProperties"].Columns;
             string prueba = Convert.ToString(EquityRows[0][0]);
+
             foreach (DataRow DRow in EquityRows)
             {
-                Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(DRow[2]), Convert.ToDouble(RateRows[0][1])));
+                Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(DRow[2]), Convert.ToDouble(DRow[3])));
             }
             return Equities;
 
