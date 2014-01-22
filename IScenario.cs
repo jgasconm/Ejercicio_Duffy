@@ -610,6 +610,7 @@ namespace DuffyExercise
     {
         protected static Dictionary<double, List <double> >  _NPVList;
         public abstract void addNPVToMetric(double date, int path, double NPV, IScenario scenario);
+        public abstract void showMetric();
 
     }
     /// <summary>
@@ -635,12 +636,44 @@ namespace DuffyExercise
             else
                 _NPVList[date].Add(NPV);  
         }
+        public override void showMetric()
+        {
+            foreach (double Date in _NPVList.Keys)
+            {
+                HistogramByDate(Date);
+            }
+        }
         public void HistogramByDate(double date)
         {
-            List<double> NPVs = _NPVList[date];
-            NPVs.Sort(); 
+            List<double> NPVs = new List<double>(_NPVList[date]);
+            List<double> probability = new List<double>(_nBars);
+            NPVs.Sort();
+            
+            double max = NPVs[0];
+            double min = NPVs[NPVs.Count - 1];
+            double range = NPVs[NPVs.Count - 1] - NPVs[0];
+            double step = (1 / _nBars) * range;
+            int k = 0;
+            double bound = step;
+            for (int i = 0; i < NPVs.Count; i++)
+            {
+                if (NPVs[i] <= bound)
+                    probability[k] += 1;
+                else
+                {
+                    k++;
+                    bound += step;
+                }
+            }
 
-        }
+
+                
+         }
+
+
+
+
+        
     }
 
     // --------------------------------------------------------------------------------------
@@ -709,7 +742,6 @@ namespace DuffyExercise
 
             DataRowCollection RateRows = Rate_Data.Tables["Rates"].Rows;
             string prueba = Convert.ToString(EquityRows[0][0]);
-            Console.WriteLine(prueba);
             foreach (DataRow DRow in EquityRows)
             {
                 Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(DRow[2]), Convert.ToDouble(RateRows[0][1])));
@@ -792,6 +824,14 @@ namespace DuffyExercise
                 }
             }
 
+        }
+
+        public void ShowMetrics()
+        {
+            foreach (Metric Mtc in _l_Metric)
+            {
+                Mtc.showMetric();
+            }
         }
 
         public void InitializePath(int i)
