@@ -193,6 +193,16 @@ namespace DuffyExercise
         }
         public abstract void evolve(double dateFrom, double dateTo, int path,
                                     IScenario scenario, double[] correlatedBrownians);
+
+        public override bool Equals(object obj)
+        {
+            return base.Equals(obj as string);
+        }
+
+        public bool Equals(string Factor)
+        {
+            return Factor == ID;
+        }    
         /// <summary>
         ///     Returns the number of Brownian Motions needed to evolve the Risk Factor
         /// </summary>
@@ -208,6 +218,9 @@ namespace DuffyExercise
         //ATTRIBUTES
         private double _vol;
         private double _riskFreeRate;
+
+        public double vol{get{return _vol;}}
+        public double riskFreeRate{get{return _riskFreeRate;}}
 
         //CONSTRUCTOR
         public EquityRiskFactor(string ID, double spot) : base(ID, spot)
@@ -242,6 +255,9 @@ namespace DuffyExercise
                 throw new Exception("Error in method evolve of risk factor " + ID + " from date " + dateFrom);
             }
         }
+
+            
+       
 
         public override int size()
         {
@@ -440,62 +456,46 @@ namespace DuffyExercise
     ///     Information about the contractual agreement.
     ///     Populate with NEEDED ATTRIBUTES
     /// </summary>
-    public abstract class InstrumentContract
+    
+    public class InstrumentContract 
     {
-        // -> ATTRIBUTES
-        // -------------------
-        public abstract double Payoff(double underlyingValue, double nominal);
-    }
-
-    public class InstrumentContractPayoff : InstrumentContract
-    {
-        public enum PayoffType : uint
+        /*public enum PayoffType : uint
         {
             Call = 1,
             Put = 2,
             Forward =3,
-        }
+        }*/
 
         string _underlyingID;   // Underlying or risk factor to use in the payoff
         double _strike;         // Strike level
-        PayoffType _optionType; // Option type ("call", "put")
+        string _optionType; // Option type ("call", "put")
         double _optionDate;
         double _nominal;
+        double _vol;
+        double _riskFreeRate;
 
-        public InstrumentContractPayoff(string underlyingID, double strike, PayoffType optionType, double optionDate, double nominal)
+        public InstrumentContract(string underlyingID, string optionType, double strike, double optionDate, double nominal, double vol, double riskFreeFactor)
         {
             _underlyingID = underlyingID;
             _strike = strike;
             _optionType = optionType;
             _optionDate = optionDate;
             _nominal = nominal;
+            _vol = vol;
+            _riskFreeRate = riskFreeRate;
         }
 
         // -> ACCESORS & MODIFIERS
         // -----------------------
         public double strike { get { return _strike; } set { _strike = value; } }
-        public PayoffType optionType { get { return _optionType; } set { _optionType = value; } }
+        public string optionType { get { return _optionType; } set { _optionType = value; } }
         public string underlyingID { get { return _underlyingID; } set {_underlyingID = value; } }
         public double optionDate { get { return _optionDate; } set { _optionDate = value; } }
         public double nominal { get { return _nominal; } set { _nominal = value; } }
+        public double vol { get { return _vol; } set { _vol = value; } }
+        public double riskFreeRate { get { return _riskFreeRate; } set { _vol = value; } }
 
-        public override double Payoff(double underlyingValue, double nominal)
-        {
-            if (_optionType == PayoffType.Call)
-            {
-                return nominal * (Math.Max(underlyingValue - strike, 0.0));
-            }
-            else if (_optionType == PayoffType.Put)
-            {
-                return nominal * (Math.Max(strike - underlyingValue, 0.0));
-            }
-            else if (_optionType == PayoffType.Forward)
-            {
-                return nominal * (underlyingValue - strike);
-            }
-            else
-                throw new Exception("InstrumentCallPutPayoff optionType must be either Call or Put");
-        }
+
     }
 
     /// <summary>
@@ -506,18 +506,49 @@ namespace DuffyExercise
         public abstract double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario);
     }
 
-    public class PricerPayoff : Pricer
+    public class PricerCall : Pricer
+    {
+        public override double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
+        {   //Call Black-Scholes 
+            InstrumentContract Contract = instrumentContract as InstrumentContract;
+            double dcf = (Contract.optionDate - date) / 365.25;
+            if (dcf < 0) return 0.0;
+            double spot = scenario.getValue(Contract.underlyingID, date, path);
+            double tmp = Contract.vol * Math.Sqrt(dcf);
+            double d1 = (Math.Log(spot / Contract.strike) + (Contract.riskFreeRate + (Contract.vol * Contract.vol) * 0.5) * dcf) / tmp;
+            double d2 = d1 - tmp;
+            return (spot * GaussianFunctions.N(-d2)) - 
+                   (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * GaussianFunctions.N(-d1));
+        }
+    }
+
+    public class PricerPut : Pricer
+    {
+        public override double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
+        {   //Put Black-Scholes
+            InstrumentContract Contract = instrumentContract as InstrumentContract;
+            double dcf = (Contract.optionDate - date) / 365.25;
+            if (dcf <= 0) return 0.0;
+            double spot = scenario.getValue(Contract.underlyingID, date, path);
+            double tmp = Contract.vol * Math.Sqrt(dcf);
+            double d1 = (Math.Log(spot / Contract.strike) + (Contract.riskFreeRate + (Contract.vol * Contract.vol) * 0.5) * dcf) / tmp;
+            double d2 = d1 - tmp;
+
+            return (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * GaussianFunctions.N(-d2)) -
+                    (spot * GaussianFunctions.N(-d1));
+        }
+    }
+
+    public class PricerForward : Pricer
     {
         public override double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
         {
-            InstrumentContractPayoff instrContractPayOff = instrumentContract as InstrumentContractPayoff;
-            if (instrContractPayOff != null)
-            {
-                return instrContractPayOff.Payoff(scenario.getValue(instrContractPayOff.underlyingID, 
-                                                                     instrContractPayOff.optionDate, path), 
-                                                                     instrContractPayOff.nominal);
-            }
-            throw new Exception("PricerCallPutPayoff expects a InstrumentCallPutPayoff as InstrumentContract");
+            InstrumentContract Contract = instrumentContract as InstrumentContract;
+            double dcf = (Contract.optionDate - date) / 365.25;
+            if (dcf <= 0) return 0.0;
+            double Kdisc = Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf);
+            double spot = scenario.getValue(Contract.underlyingID, date, path);
+            return spot - Kdisc;
         }
     }
 
@@ -543,7 +574,7 @@ namespace DuffyExercise
 
         public Histogram(List<double> distribution)
         {
-            _NPVList = new Dictionary<NPVKey, double>;
+            _NPVList = new Dictionary<NPVKey, double>();
             _distribution = distribution;
         }
 
@@ -591,7 +622,7 @@ namespace DuffyExercise
             _simDates = ReadSimulationDates();
             Equities = ReadEquities();
             CorrelationMatrix = ReadCorrelationMatrix();
-            _l_Instruments = ReadInstruments();
+            _l_Instruments = ReadInstruments(Equities);
             _engine = new Evolver(Equities, CorrelationMatrix);
             _scenario = new Scenario(Equities, _simDates[0]);
         }
@@ -653,7 +684,7 @@ namespace DuffyExercise
             return correlMatrix;
         }
 
-        public List<Instrument> ReadInstruments()
+        public List<Instrument> ReadInstruments(List<RiskFactor> RFactors)
         {
             // Reading instrument contracts for our portfolio
 
@@ -665,12 +696,15 @@ namespace DuffyExercise
 
             foreach(DataRow Row in Rows)
             {
-                InstrumentContractPayoff contract = new InstrumentContractPayoff(Convert.ToString(Row[0]), 
-                                                                                Convert.ToDouble(Row[1]),
-                                                                                (InstrumentContractPayoff.PayoffType)Convert.ToUInt32(Row[2]), 
+                EquityRiskFactor RF = RFactors.Find(p => p.Equals(Convert.ToString(Row[0]))) as EquityRiskFactor;
+                InstrumentContract contract = new InstrumentContract(Convert.ToString(Row[0]),
+                                                                                Convert.ToString(Row[1]), 
+                                                                                Convert.ToDouble(Row[2]),
                                                                                 Convert.ToDouble(Row[3]), 
-                                                                                Convert.ToDouble(Row[4]));
-                PricerPayoff pricer = new PricerPayoff();
+                                                                                Convert.ToDouble(Row[4]),
+                                                                                RF.vol,
+                                                                                RF.riskFreeRate);
+                Pricer pricer = FactoryPricer.CreatePricer(Convert.ToString(Row[1]));
                 instruments.Add(new Instrument(pricer, contract));
             }
 
@@ -722,7 +756,7 @@ namespace DuffyExercise
     {
         public DataSet Read(string RangeName)
         {
-            String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source="+System.Environment.CurrentDirectory+"/Duffy_Interface.xls;Extended Properties=Excel 8.0;";
+            String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source="+System.Environment.CurrentDirectory+"\\Duffy_Interface.xls;Extended Properties=Excel 8.0;";
             OleDbConnection objConn = new OleDbConnection(sConnectionString);
             objConn.Open();
             OleDbCommand objCmd = new OleDbCommand("SELECT * FROM " + RangeName, objConn);
@@ -738,5 +772,48 @@ namespace DuffyExercise
     }
 
     // --------------------------------------------------------------------------------------
+
+    public  class GaussianFunctions
+    {
+        public static double n(double x)
+        {
+            double A = 1.0 / Math.Sqrt(2.0 * 3.1415);
+            return A * Math.Exp(-x * x * 0.5);
+        }
+
+        public static double N(double x)
+        {
+            double a1 = 0.43661836;
+            double a2 = -0.1201676;
+            double a3 = 0.9372980;
+
+            double k = 1.0 / (1.0 * (0.33267 * x));
+
+            if(x >= 0.0)
+            {
+                return 1.0 -n(x)*(a1*k + (a2 * k * k) + (a3 *k *k *k));
+            }
+            else
+            {
+                return 1.0 -N(-x);
+            }
+        }
+
+     }
+
+    public class FactoryPricer
+    {
+        public static Pricer CreatePricer(string InstrumentType)
+        {
+            if (InstrumentType == "Call")
+                return new PricerCall();
+            else if (InstrumentType == "Put")
+                return new PricerPut();
+            else
+                return new PricerForward();
+        }
+    }
+
+
 
 }
