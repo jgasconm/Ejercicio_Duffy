@@ -94,9 +94,9 @@ namespace DuffyExercise
             }
         }
 
-        public double[] dispatch(string sID)
+        public double[] dispatch(int numFactors)
         {
-            return _gaussianGenerator.nextSequence(NumFactorsForEachID[sID]);
+            return _gaussianGenerator.nextSequence(numFactors);
         }
     }
 
@@ -186,13 +186,13 @@ namespace DuffyExercise
 
         // -> ABSTRACT METHODS
         //---------------------------------------
-        public void evolve(double dateFrom, double dateTo, int path, IScenario scenario,
+        /*public void evolve(double dateFrom, double dateTo, int path, IScenario scenario,
                                     double[] correlatedBrownians, BrownianManager brownianDispacther)
         {
             evolve(dateFrom, dateTo, path, scenario, brownianDispacther.dispatch(ID));
-        }
+        }*/
         public abstract void evolve(double dateFrom, double dateTo, int path,
-                                    IScenario scenario, double[] correlatedBrownians);
+                                    IScenario scenario, double correlatedBrownians);
 
         public override bool Equals(object obj)
         {
@@ -237,7 +237,7 @@ namespace DuffyExercise
         // -> METHODS
         // --------------------
         public override void evolve(double dateFrom, double dateTo, int path,
-                                    IScenario scenario, double[] correlatedBrownians)
+                                    IScenario scenario, double correlatedBrownians)
         {
             double currentValue;
             double nextValue;
@@ -247,7 +247,7 @@ namespace DuffyExercise
                 currentValue = scenario.getValue(ID, dateFrom, path);
                 nextValue = currentValue * Math.Exp(_riskFreeRate*incT) 
                                          * Math.Exp(- (Math.Pow(_vol, 2) * (incT/2)) )
-                                         * Math.Exp(_vol * Math.Sqrt(incT) * correlatedBrownians[0]);
+                                         * Math.Exp(_vol * Math.Sqrt(incT) * correlatedBrownians);
                 scenario.setValue(ID, dateTo, path, nextValue);
             }
             catch
@@ -375,7 +375,10 @@ namespace DuffyExercise
                 double sum = 0.0;
                 for (int j = i; j < dimens; j++)
                 {
-                   sum += baseChangeMatrix[i][j] * independentNormals[j];
+                    if(j <= i)
+                        sum += baseChangeMatrix[i][j] * independentNormals[j];
+                    else
+                        sum += baseChangeMatrix[j][i] * independentNormals[j];
                 }
                 correlatedNormals[i] = sum;
             }
@@ -450,12 +453,12 @@ namespace DuffyExercise
             double[] independentNormals; // Just the independent gaussian random numer
             double[] correlatedBrownians; // Correlated brownian motion, including sqrt(deltaT)
 
-            foreach(RiskFactor Factor in _l_RiskFactors)
-            {
-                independentNormals = _brownianManager.dispatch(Factor.ID);
-                correlatedBrownians = _correlator.correlate(dateFrom, dateTo, independentNormals);
-                Factor.evolve(dateFrom, dateTo, path, scenario, correlatedBrownians);
-            }
+            
+            independentNormals = _brownianManager.dispatch(_l_RiskFactors.Count);
+            correlatedBrownians = _correlator.correlate(dateFrom, dateTo, independentNormals);
+            for (int i = 0; i < _l_RiskFactors.Count; i++ )
+                _l_RiskFactors[i].evolve(dateFrom, dateTo, path, scenario, correlatedBrownians[i]);
+            
         }
     }
 
@@ -561,8 +564,8 @@ namespace DuffyExercise
             double tmp = Contract.vol * Math.Sqrt(dcf);
             double d1 = (Math.Log(spot / Contract.strike) + (Contract.riskFreeRate + (Contract.vol * Contract.vol) * 0.5) * dcf) / tmp;
             double d2 = d1 - tmp;
-            return (spot * GaussianFunctions.N(-d2)) - 
-                   (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * GaussianFunctions.N(-d1));
+            return (spot * Functions.N(-d2)) - 
+                   (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * Functions.N(-d1));
         }
     }
 
@@ -578,8 +581,8 @@ namespace DuffyExercise
             double d1 = (Math.Log(spot / Contract.strike) + (Contract.riskFreeRate + (Contract.vol * Contract.vol) * 0.5) * dcf) / tmp;
             double d2 = d1 - tmp;
 
-            return (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * GaussianFunctions.N(-d2)) -
-                    (spot * GaussianFunctions.N(-d1));
+            return (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * Functions.N(-d2)) -
+                    (spot * Functions.N(-d1));
         }
     }
 
@@ -605,30 +608,38 @@ namespace DuffyExercise
 
     public abstract class Metric
     {
-        protected static Dictionary<NPVKey, double>  _NPVList;
+        protected static Dictionary<double, List <double> >  _NPVList;
         public abstract void addNPVToMetric(double date, int path, double NPV, IScenario scenario);
-        public abstract void writeToConsole();
+
     }
     /// <summary>
     ///     Stores the Distribution for the NPV for a certain date
     /// </summary>
     public class Histogram : Metric
     {
-        private List<double> _distribution;
+        private int _nBars;
 
-        public Histogram(List<double> distribution)
+        public Histogram(int nBars)
         {
-            _NPVList = new Dictionary<NPVKey, double>();
-            _distribution = distribution;
+            _NPVList = new Dictionary<double, List <double> >();
+            _nBars = nBars;
         }
 
         public override void addNPVToMetric(double date, int path, double NPV, IScenario scenario)
         {
-            _NPVList.Add(new NPVKey(date, path), NPV);  
+            if(_NPVList[date] == null)
+            {
+                List<double> newList = new List<double>();
+                newList.Add(NPV);
+            }
+            else
+                _NPVList[date].Add(NPV);  
         }
-        public override void writeToConsole()
+        public void HistogramByDate(double date)
         {
-            throw new Exception("The method or operation is not implemented.");
+            List<double> NPVs = _NPVList[date];
+            NPVs.Sort(); 
+
         }
     }
 
@@ -817,7 +828,7 @@ namespace DuffyExercise
 
     // --------------------------------------------------------------------------------------
 
-    public  class GaussianFunctions
+    public  class Functions
     {
         public static double n(double x)
         {
@@ -841,6 +852,13 @@ namespace DuffyExercise
             {
                 return 1.0 -N(-x);
             }
+        }
+
+        public static void swap(ref int x,ref int y)
+        {
+            int aux = x;
+            x = y;
+            y = aux;
         }
 
      }
