@@ -615,8 +615,27 @@ namespace DuffyExercise
     public abstract class Metric
     {
         protected static Dictionary<double, List <double> >  _NPVList;
-        public abstract void addNPVToMetric(double date, int path, double NPV, IScenario scenario);
         public abstract void showMetric();
+
+        public Metric()
+        {
+            _NPVList = new Dictionary<double, List<double>>();
+        }
+
+        public void addNPVToMetric(double date, int path, double NPV, IScenario scenario)
+        {
+            List<double> NPVdate;
+            if (_NPVList.TryGetValue(date, out NPVdate) == false)//Look for the date into _NPVList
+            { //Creat a new List
+                List<double> newList = new List<double>();
+                newList.Add(NPV);
+                _NPVList.Add(date, newList);
+            }
+            else
+                NPVdate.Add(NPV);//Add the value into the List
+        }
+
+              
 
     }
     /// <summary>
@@ -626,24 +645,13 @@ namespace DuffyExercise
     {
         private int _nBars;
 
-        public Histogram(int nBars)
+        public Histogram(int nBars): base()
         {
-            _NPVList = new Dictionary<double, List <double> >();
             _nBars = nBars;
         }
 
-        public override void addNPVToMetric(double date, int path, double NPV, IScenario scenario)
-        {
-            List<double> NPVdate;
-            if(_NPVList.TryGetValue(date,out NPVdate) == false)
-            {
-                List<double> newList = new List<double>();
-                newList.Add(NPV);
-                _NPVList.Add(date, newList);
-            }
-            else
-                NPVdate.Add(NPV);  
-        }
+        
+
         public override void showMetric()
         {
             foreach (double Date in _NPVList.Keys)
@@ -651,6 +659,7 @@ namespace DuffyExercise
                 HistogramByDate(Date);
             }
         }
+
         public void HistogramByDate(double date)
         {
             List<double> NPVs = new List<double>(_NPVList[date]);
@@ -663,7 +672,9 @@ namespace DuffyExercise
             double step = (1.0 / (_nBars -1)) * range;
             int k = 0;
             double bound = step;
-            if (max == 0 && min == 0) return;
+
+            if (max == min) return; //The NPV is zero for this date
+
             Console.WriteLine("Histograma NPV a la fecha {0}", date);
             Console.WriteLine("");
             
@@ -678,7 +689,9 @@ namespace DuffyExercise
                 probability[k] += 1;
                     
             }
+
             bound = 0;
+            
             for(int i = 0; i < _nBars; i++)
             {
                 probability[i] /= NPVs.Count;
@@ -694,6 +707,48 @@ namespace DuffyExercise
                 
     }
 
+    public class Mean : Metric
+    {
+
+        public override void showMetric()
+        {
+            foreach (double Date in _NPVList.Keys)
+            {
+                HistogramByDate(Date);
+            }
+        }
+
+        public void HistogramByDate(double date)
+        {
+            List<double> NPVs = new List<double>(_NPVList[date]);
+            NPVs.Sort();
+            if (NPVs[0] == NPVs[NPVs.Count - 1]) return; //The NPV is zero for this date
+            double NPVsMean = 0;
+            foreach(double NPV in NPVs)
+            {
+                NPVsMean += NPV;
+            }
+
+            NPVsMean /= NPVs.Count;
+            Console.WriteLine("\n NPV mean at {0} = {1} \n", date, NPVsMean);
+
+        }
+        
+    }
+
+    public class MetricsFactory
+    {
+        public static Metric CreateMetric(DataRow Row)
+        {
+            string MetricName = Convert.ToString(Row[0]);
+
+            if(MetricName == "Histogram")
+                return new Histogram(Convert.ToInt32(Row[1]));
+            else
+                return new Mean();
+
+        }
+    }
      
 
     // --------------------------------------------------------------------------------------
@@ -724,110 +779,23 @@ namespace DuffyExercise
 
             _l_Instruments = new List<Instrument>();
             _l_Metric = new List<Metric>();
-            _l_Metric.Add(new Histogram(15));
-
-            //Read Excel info and fill Attributes
+            
             List<RiskFactor> Equities;
             double[,] CorrelationMatrix;
-            _simDates = ReadSimulationDates();
-            Equities = ReadEquities();
-            CorrelationMatrix = ReadCorrelationMatrix();
-            _l_Instruments = ReadInstruments(Equities);
-            _nSimulations = ReadSimulationData();
+
+            //Read Excel info and fill Attributes
+            _simDates = ReadExcel.ReadSimulationDates();
+            Equities = ReadExcel.ReadEquities();
+            CorrelationMatrix = ReadExcel.ReadCorrelationMatrix();
+            _l_Instruments = ReadExcel.ReadInstruments(Equities);
+            _nSimulations = ReadExcel.ReadSimulationData();
+            _l_Metric = ReadExcel.ReadMetrics();
+
             _engine = new Evolver(Equities, CorrelationMatrix);
             _scenario = new Scenario(Equities, _simDates[0]);
         }
 
-        public List<double> ReadSimulationDates()
-        {
-            List<double> Dates = new List<double>();
-            ReadRange RangeHandle = new ReadRange();
-            DataSet Dates_Data = RangeHandle.Read("SimDates");
-            DataRowCollection Row = Dates_Data.Tables["SimDates"].Rows;
-
-            foreach(DataRow DRow in Row)
-            {
-                Dates.Add(Convert.ToDouble(DRow[0]));
-            }
-
-            return Dates;
-
-        }
-
-        public int ReadSimulationData()
-        {
-            List<double> Dates = new List<double>();
-            ReadRange RangeHandle = new ReadRange();
-            DataSet Dates_Data = RangeHandle.Read("Simulation");
-            DataRowCollection Row = Dates_Data.Tables["Simulation"].Rows;
-            return Convert.ToInt32(Row[0][1]);
-
-        }
-
-        public List<RiskFactor> ReadEquities()
-        {
-            List<RiskFactor> Equities = new List<RiskFactor>();
-            ReadRange RangeHandle = new ReadRange();
-            DataSet Equity_Data = RangeHandle.Read("EquityFeatures");
-            DataRowCollection EquityRows = Equity_Data.Tables["EquityFeatures"].Rows;
-            DataColumnCollection EquityColumns = Equity_Data.Tables["EquityFeatures"].Columns;
-            string prueba = Convert.ToString(EquityRows[0][0]);
-
-            foreach (DataRow DRow in EquityRows)
-            {
-                Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(DRow[2]), Convert.ToDouble(DRow[3])));
-            }
-            return Equities;
-
-        }
-
-        public double[,] ReadCorrelationMatrix()
-        {
-            double[,] correlMatrix;
-            ReadRange Matrix_Range = new ReadRange();
-            DataSet Matrix_Data = Matrix_Range.Read("CorrelationMatrix");
-            DataColumnCollection Column = Matrix_Data.Tables["CorrelationMatrix"].Columns;
-            DataRowCollection Row = Matrix_Data.Tables["CorrelationMatrix"].Rows;
-
-            correlMatrix = new double[Row.Count, Column.Count-1];
-
-            for (int i = 0; i < Row.Count; i++)
-            {
-                for (int j = 1; j < Column.Count; j++)
-                {
-                   correlMatrix[i, j-1] = Convert.ToDouble(Row[i][j]);
-                }
-            }
-
-            return correlMatrix;
-        }
-
-        public List<Instrument> ReadInstruments(List<RiskFactor> RFactors)
-        {
-            // Reading instrument contracts for our portfolio
-
-            List<Instrument> instruments = new List<Instrument>();
-            ReadRange Instrument_Range = new ReadRange();
-            DataSet Instrument_Data = Instrument_Range.Read("Instruments");
-            DataColumnCollection Column = Instrument_Data.Tables["Instruments"].Columns;
-            DataRowCollection Rows = Instrument_Data.Tables["Instruments"].Rows;
-
-            foreach(DataRow Row in Rows)
-            {
-                EquityRiskFactor RF = RFactors.Find(p => p.Equals(Convert.ToString(Row[0]))) as EquityRiskFactor;
-                InstrumentContract contract = new InstrumentContract(Convert.ToString(Row[0]),
-                                                                                Convert.ToString(Row[1]), 
-                                                                                Convert.ToDouble(Row[2]),
-                                                                                Convert.ToDouble(Row[3]), 
-                                                                                Convert.ToDouble(Row[4]),
-                                                                                RF.vol,
-                                                                                RF.riskFreeRate);
-                Pricer pricer = FactoryPricer.CreatePricer(Convert.ToString(Row[1]));
-                instruments.Add(new Instrument(pricer, contract));
-            }
-
-            return instruments;
-        }
+        
 
         // -> METHODS
         // -------------------------------
@@ -878,24 +846,7 @@ namespace DuffyExercise
        
     }
 
-    public class ReadRange
-    {
-        public DataSet Read(string RangeName)
-        {
-            String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source="+System.Environment.CurrentDirectory+"\\Duffy_Interface.xls;Extended Properties=Excel 8.0;";
-            OleDbConnection objConn = new OleDbConnection(sConnectionString);
-            objConn.Open();
-            OleDbCommand objCmd = new OleDbCommand("SELECT * FROM " + RangeName, objConn);
-            OleDbDataAdapter Adapter = new OleDbDataAdapter(objCmd);
-            DataSet Data = new DataSet();
-            Adapter.Fill(Data, RangeName);
-            objConn.Close();
-            return Data;
-
-
-
-        }
-    }
+    
 
     // --------------------------------------------------------------------------------------
 
@@ -934,7 +885,7 @@ namespace DuffyExercise
 
      }
 
-    public class FactoryPricer
+    public class PricerFactory
     {
         public static Pricer CreatePricer(string InstrumentType)
         {
@@ -947,6 +898,127 @@ namespace DuffyExercise
         }
     }
 
+
+    public class ReadExcel
+    {
+        public static List<double> ReadSimulationDates()
+        {
+            List<double> Dates = new List<double>();
+            DataSet Dates_Data = ReadRange("SimDates");
+            DataRowCollection Row = Dates_Data.Tables["SimDates"].Rows;
+
+            foreach (DataRow DRow in Row)
+            {
+                Dates.Add(Convert.ToDouble(DRow[0]));
+            }
+
+            return Dates;
+
+        }
+
+        public static int ReadSimulationData()
+        {
+            List<double> Dates = new List<double>();
+            DataSet Dates_Data = ReadRange("Simulation");
+            DataRowCollection Row = Dates_Data.Tables["Simulation"].Rows;
+            return Convert.ToInt32(Row[0][1]);
+
+        }
+
+        public static List<Metric> ReadMetrics()
+        {
+            List<double> Dates = new List<double>();
+            List<Metric> Metrics = new List<Metric>();
+            DataSet Dates_Data = ReadRange("Metrics");
+            DataRowCollection Rows = Dates_Data.Tables["Metrics"].Rows;
+
+            foreach (DataRow Row in Rows)
+            {
+                Metrics.Add(MetricsFactory.CreateMetric(Row));
+            }
+
+            return Metrics;
+        }
+
+        public static List<RiskFactor> ReadEquities()
+        {
+            List<RiskFactor> Equities = new List<RiskFactor>();
+            DataSet Equity_Data = ReadRange("EquityFeatures");
+            DataRowCollection EquityRows = Equity_Data.Tables["EquityFeatures"].Rows;
+            DataColumnCollection EquityColumns = Equity_Data.Tables["EquityFeatures"].Columns;
+            string prueba = Convert.ToString(EquityRows[0][0]);
+
+            foreach (DataRow DRow in EquityRows)
+            {
+                Equities.Add(new EquityRiskFactor(Convert.ToString(DRow[0]), Convert.ToDouble(DRow[1]), Convert.ToDouble(DRow[2]), Convert.ToDouble(DRow[3])));
+            }
+            return Equities;
+
+        }
+
+        public static double[,] ReadCorrelationMatrix()
+        {
+            double[,] correlMatrix;
+            DataSet Matrix_Data = ReadRange("CorrelationMatrix");
+            DataColumnCollection Column = Matrix_Data.Tables["CorrelationMatrix"].Columns;
+            DataRowCollection Row = Matrix_Data.Tables["CorrelationMatrix"].Rows;
+
+            correlMatrix = new double[Row.Count, Column.Count - 1];
+
+            for (int i = 0; i < Row.Count; i++)
+            {
+                for (int j = 1; j < Column.Count; j++)
+                {
+                    correlMatrix[i, j - 1] = Convert.ToDouble(Row[i][j]);
+                }
+            }
+
+            return correlMatrix;
+        }
+
+        public static List<Instrument> ReadInstruments(List<RiskFactor> RFactors)
+        {
+            // Reading instrument contracts for our portfolio
+
+            List<Instrument> instruments = new List<Instrument>();
+            DataSet Instrument_Data = ReadRange("Instruments");
+            DataColumnCollection Column = Instrument_Data.Tables["Instruments"].Columns;
+            DataRowCollection Rows = Instrument_Data.Tables["Instruments"].Rows;
+
+            foreach (DataRow Row in Rows)
+            {
+                EquityRiskFactor RF = RFactors.Find(p => p.Equals(Convert.ToString(Row[0]))) as EquityRiskFactor;
+                InstrumentContract contract = new InstrumentContract(Convert.ToString(Row[0]),
+                                                                                Convert.ToString(Row[1]),
+                                                                                Convert.ToDouble(Row[2]),
+                                                                                Convert.ToDouble(Row[3]),
+                                                                                Convert.ToDouble(Row[4]),
+                                                                                RF.vol,
+                                                                                RF.riskFreeRate);
+                Pricer pricer = PricerFactory.CreatePricer(Convert.ToString(Row[1]));
+                instruments.Add(new Instrument(pricer, contract));
+            }
+
+            return instruments;
+        }
+
+        public static DataSet ReadRange(string RangeName)
+        {
+                String sConnectionString = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + System.Environment.CurrentDirectory + "\\Duffy_Interface.xls;Extended Properties=Excel 8.0;";
+                OleDbConnection objConn = new OleDbConnection(sConnectionString);
+                objConn.Open();
+                OleDbCommand objCmd = new OleDbCommand("SELECT * FROM " + RangeName, objConn);
+                OleDbDataAdapter Adapter = new OleDbDataAdapter(objCmd);
+                DataSet Data = new DataSet();
+                Adapter.Fill(Data, RangeName);
+                objConn.Close();
+                return Data;
+
+
+
+         }
+        
+    }
 
 
 }
