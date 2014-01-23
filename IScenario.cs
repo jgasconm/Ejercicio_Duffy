@@ -301,10 +301,15 @@ namespace DuffyExercise
 
     public class BoxMuller : IGaussianGenerator
     {
+        private static Random _rand;
+
+        public BoxMuller()
+        {
+            _rand = new System.Random();
+        }
         public double next()
         {
-            Random rand = new System.Random();
-            return rand.NextGaussian();
+            return _rand.NextGaussian();
         }
 
         public double[] nextSequence(int dim)
@@ -564,8 +569,9 @@ namespace DuffyExercise
             double tmp = Contract.vol * Math.Sqrt(dcf);
             double d1 = (Math.Log(spot / Contract.strike) + (Contract.riskFreeRate + (Contract.vol * Contract.vol) * 0.5) * dcf) / tmp;
             double d2 = d1 - tmp;
-            return (spot * Functions.N(-d2)) - 
-                   (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * Functions.N(-d1));
+            return (spot * Functions.N(d2)) - 
+                   (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * Functions.N(d1));
+
         }
     }
 
@@ -651,39 +657,44 @@ namespace DuffyExercise
             double[] probability = new double[_nBars];
             NPVs.Sort();
             
-            double max = NPVs[0];
-            double min = NPVs[NPVs.Count - 1];
-            double range = NPVs[NPVs.Count - 1] - NPVs[0];
+            double min = NPVs[0];
+            double max = NPVs[NPVs.Count - 1];
+            double range = max - min;
             double step = (1.0 / (_nBars -1)) * range;
             int k = 0;
             double bound = step;
+            if (max == 0 && min == 0) return;
+            Console.WriteLine("Histograma NPV a la fecha {0}", date);
+            Console.WriteLine("");
+            
             for (int i = 0; i < NPVs.Count; i++)
             {
 
-                while ((NPVs[i] - NPVs[0]) > bound)
+                while ((NPVs[i] - min) > bound)
                 {
                     k++;
                     bound += step;
                 }
                 probability[k] += 1;
-                /*if ((NPVs[i]-NPVs[0]) <= bound)
-                    probability[k] += 1;
-                else
-                {
-                    k++;
-                    bound += step;
-                }*/
+                    
             }
-
-
-                
+            bound = 0;
+            for(int i = 0; i < _nBars; i++)
+            {
+                probability[i] /= NPVs.Count;
+                Console.Write("[{0:0.00}][{1:0.00}]", bound + min,bound + step + min);
+                for (int j = 0; j < Convert.ToInt16(probability[i] * 100); j++)
+                    Console.Write("=");
+                Console.Write(">     P = {0}", probability[i]);
+                Console.Write("\n");
+                bound += step;
+            }
+            Console.WriteLine("");
          }
-
-
-
-
-        
+                
     }
+
+     
 
     // --------------------------------------------------------------------------------------
 
@@ -713,7 +724,7 @@ namespace DuffyExercise
 
             _l_Instruments = new List<Instrument>();
             _l_Metric = new List<Metric>();
-            _l_Metric.Add(new Histogram(10));
+            _l_Metric.Add(new Histogram(15));
 
             //Read Excel info and fill Attributes
             List<RiskFactor> Equities;
@@ -747,9 +758,9 @@ namespace DuffyExercise
         {
             List<double> Dates = new List<double>();
             ReadRange RangeHandle = new ReadRange();
-            DataSet Dates_Data = RangeHandle.Read("Rates");
-            DataRowCollection Row = Dates_Data.Tables["Rates"].Rows;
-            return Convert.ToInt16(Row[0][1]);
+            DataSet Dates_Data = RangeHandle.Read("Simulation");
+            DataRowCollection Row = Dates_Data.Tables["Simulation"].Rows;
+            return Convert.ToInt32(Row[0][1]);
 
         }
 
@@ -757,9 +768,9 @@ namespace DuffyExercise
         {
             List<RiskFactor> Equities = new List<RiskFactor>();
             ReadRange RangeHandle = new ReadRange();
-            DataSet Equity_Data = RangeHandle.Read("EquityProperties");
-            DataRowCollection EquityRows = Equity_Data.Tables["EquityProperties"].Rows;
-            DataColumnCollection EquityColumns = Equity_Data.Tables["EquityProperties"].Columns;
+            DataSet Equity_Data = RangeHandle.Read("EquityFeatures");
+            DataRowCollection EquityRows = Equity_Data.Tables["EquityFeatures"].Rows;
+            DataColumnCollection EquityColumns = Equity_Data.Tables["EquityFeatures"].Columns;
             string prueba = Convert.ToString(EquityRows[0][0]);
 
             foreach (DataRow DRow in EquityRows)
@@ -820,27 +831,27 @@ namespace DuffyExercise
 
         // -> METHODS
         // -------------------------------
-        public void calculate(List<double> dates, int noSim)
+        public void calculate()
         {
      
 
             // -> CREATE SCENARIO ...
-            for (int j = 0; j < noSim; ++j)
+            for (int j = 0; j < _nSimulations; ++j)
             {
                 InitializePath(j);
-                for (int i = 1; i < dates.Count; ++i)
+                for (int i = 1; i < _simDates.Count; ++i)
                 {
                     // -> EVOLVE ..
-                    _engine.evolve(dates[i - 1], dates[i], j, _scenario);
+                    _engine.evolve(_simDates[i - 1], _simDates[i], j, _scenario);
 
                     // -> PRICE
                     double npv = 0.0;
                     for (int k = 0; k < _l_Instruments.Count; ++k)
-                        npv += _l_Instruments[k].price(dates[i], j, _scenario);
+                        npv += _l_Instruments[k].price(_simDates[i], j, _scenario);
 
                     // -> CALL TO METRIC TO TAKE INTO ACCOUNT THE NPV
                     foreach (Metric metric in _l_Metric)
-                        metric.addNPVToMetric(dates[i], j, npv, _scenario);
+                        metric.addNPVToMetric(_simDates[i], j, npv, _scenario);
                 }
             }
 
@@ -902,7 +913,7 @@ namespace DuffyExercise
             double a2 = -0.1201676;
             double a3 = 0.9372980;
 
-            double k = 1.0 / (1.0 * (0.33267 * x));
+            double k = 1.0 / (1.0 + (0.33267 * x));
 
             if(x >= 0.0)
             {
