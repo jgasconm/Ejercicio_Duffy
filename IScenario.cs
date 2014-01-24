@@ -202,7 +202,14 @@ namespace DuffyExercise
         public bool Equals(string Factor)
         {
             return Factor == ID;
-        }    
+        }
+
+        public override int GetHashCode()
+        {
+            return _ID.GetHashCode() ^ _spot.GetHashCode();
+        }
+
+
         /// <summary>
         ///     Returns the number of Brownian Motions needed to evolve the Risk Factor
         /// </summary>
@@ -481,11 +488,11 @@ namespace DuffyExercise
     {
         // -> ATTRIBUTES
         // -------------------
-        Pricer _pricer;
+        PricerFunction _pricer;
         InstrumentContract _instrumentContract;
 
         // Constructor
-        public Instrument(Pricer pricer, InstrumentContract instrumentContract)
+        public Instrument(PricerFunction pricer, InstrumentContract instrumentContract)
         {
             _pricer = pricer;
             _instrumentContract = instrumentContract;
@@ -495,12 +502,12 @@ namespace DuffyExercise
         // --------------------
         public virtual double price(double date, int path, IScenario scenario)
         {
-            return _pricer.price(date, path, _instrumentContract, scenario);
+            return _pricer(date, path, _instrumentContract, scenario);
         }
 
         // -> ACCEORS & MODIFIERS
         // -----------------------
-        public Pricer pricer { get { return _pricer; } set { _pricer = value; } }
+        //public PricerFunction pricer { get { return _pricer; } set { _pricer = value; } }
         public InstrumentContract instrumentContract { get { return _instrumentContract; } set { _instrumentContract = value; } }
     }
 
@@ -553,14 +560,12 @@ namespace DuffyExercise
     /// <summary>
     ///     Implements the logic of pricing.
     /// </summary>
-    public abstract class Pricer
-    {
-        public abstract double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario);
-    }
 
-    public class PricerCall : Pricer
+    public delegate double PricerFunction(double date, int path, InstrumentContract instrumentContract, IScenario scenario);
+
+    public class Pricer
     {
-        public override double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
+        public static double priceCall(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
         {   //Call Black-Scholes 
             InstrumentContract Contract = instrumentContract as InstrumentContract;
             double dcf = (Contract.optionDate - date) / 365.25;
@@ -569,15 +574,12 @@ namespace DuffyExercise
             double tmp = Contract.vol * Math.Sqrt(dcf);
             double d1 = (Math.Log(spot / Contract.strike) + (Contract.riskFreeRate + (Contract.vol * Contract.vol) * 0.5) * dcf) / tmp;
             double d2 = d1 - tmp;
-            return (spot * Functions.N(d2)) - 
+            return (spot * Functions.N(d2)) -
                    (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * Functions.N(d1));
-
         }
-    }
 
-    public class PricerPut : Pricer
-    {
-        public override double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
+     
+        public static  double pricePut(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
         {   //Put Black-Scholes
             InstrumentContract Contract = instrumentContract as InstrumentContract;
             double dcf = (Contract.optionDate - date) / 365.25;
@@ -590,11 +592,8 @@ namespace DuffyExercise
             return (Contract.strike * Math.Exp(-Contract.riskFreeRate * dcf) * Functions.N(-d2)) -
                     (spot * Functions.N(-d1));
         }
-    }
-
-    public class PricerForward : Pricer
-    {
-        public override double price(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
+       
+        public static double priceForward(double date, int path, InstrumentContract instrumentContract, IScenario scenario)
         {
             InstrumentContract Contract = instrumentContract as InstrumentContract;
             double dcf = (Contract.optionDate - date) / 365.25;
@@ -887,14 +886,14 @@ namespace DuffyExercise
 
     public class PricerFactory
     {
-        public static Pricer CreatePricer(string InstrumentType)
+        public static PricerFunction CreatePricer(string InstrumentType)
         {
             if (InstrumentType == "Call")
-                return new PricerCall();
+                return Pricer.priceCall;
             else if (InstrumentType == "Put")
-                return new PricerPut();
+                return Pricer.pricePut;
             else
-                return new PricerForward();
+                return Pricer.priceForward;
         }
     }
 
@@ -995,7 +994,7 @@ namespace DuffyExercise
                                                                                 Convert.ToDouble(Row[4]),
                                                                                 RF.vol,
                                                                                 RF.riskFreeRate);
-                Pricer pricer = PricerFactory.CreatePricer(Convert.ToString(Row[1]));
+                PricerFunction pricer = PricerFactory.CreatePricer(Convert.ToString(Row[1]));
                 instruments.Add(new Instrument(pricer, contract));
             }
 
